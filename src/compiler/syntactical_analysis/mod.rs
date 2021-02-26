@@ -1,4 +1,4 @@
 mod parser;
-mod parser_error;
+mod error;
 
 pub use parser::Parser;

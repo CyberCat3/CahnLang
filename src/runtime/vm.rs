@@ -4,7 +4,6 @@ use crate::{
         Value,
         error::{
             RuntimeError,
-            TypeError,
             Result
         }
     }
@@ -50,6 +49,12 @@ impl VM {
             ip += 1;
 
             match instruction {
+                Instruction::LoadNumber => {
+                    let num_index = self.exec.code[ip];
+                    ip += 1;
+                    self.push(Value::Number(self.exec.num_consts[num_index as usize]));  
+                },
+
                 Instruction::Add => {
                     let right = self.pop();
                     let left = self.pop();
@@ -59,21 +64,53 @@ impl VM {
                             self.push(Value::Number(left_num + right_val));
                         },
                         _ => {
-                            return Err(RuntimeError::TypeError(TypeError {message: format!("add-instruction expectes to numbers, but got '{}' and '{}'", left, right)}));
+                            return Err(RuntimeError::TypeError {message: format!("add-instruction expected two numbers, but got '{}' and '{}'", left, right)});
                         }
                     }
                 },
                 
-                Instruction::LoadNumber => {
-                    let num_index = self.exec.code[ip];
-                    ip += 1;
-                    self.push(Value::Number(self.exec.num_consts[num_index as usize]));  
+                Instruction::Sub => {
+                    let right = self.pop();
+                    let left = self.pop();
+
+                    match (left, right) {
+                        (Value::Number(left_num), Value::Number(right_val)) => {
+                            self.push(Value::Number(left_num - right_val));
+                        },
+                        _ => {
+                            return Err(RuntimeError::TypeError {message: format!("subtract-instruction expected two numbers, but got '{}' and '{}'", left, right)});
+                        }
+                    }
                 },
 
+                Instruction::Mul => {
+                    let right = self.pop();
+                    let left = self.pop();
 
-                Instruction::Mul => unimplemented!(),
-                Instruction::Sub => unimplemented!(),
-                Instruction::Div => unimplemented!(),
+                    match (left, right) {
+                        (Value::Number(left_num), Value::Number(right_val)) => {
+                            self.push(Value::Number(left_num * right_val));
+                        },
+                        _ => {
+                            return Err(RuntimeError::TypeError {message: format!("multiplication-instruction expected two numbers, but got '{}' and '{}'", left, right)});
+                        }
+                    }
+                },
+
+                Instruction::Div => {
+                    let right = self.pop();
+                    let left = self.pop();
+
+                    match (left, right) {
+                        (Value::Number(left_num), Value::Number(right_val)) => {
+                            self.push(Value::Number(left_num / right_val));
+                        },
+                        _ => {
+                            return Err(RuntimeError::TypeError {message: format!("division-instruction expected two numbers, but got '{}' and '{}'", left, right)});
+                        }
+                    }
+                },
+                
                 Instruction::Negate => unimplemented!(),
                 Instruction::NotBool => unimplemented!(),
                 Instruction::LoadTrue => self.push(Value::Bool(true)),

@@ -1,7 +1,7 @@
 use std::cell::Cell;
 use crate::compiler::{
     lexical_analysis::{Lexer, Token, TokenType, token_groups},
-    syntactical_analysis::parser_error::{ParseError, BadTokenError, ChainingAssignmentOperatorError, ChainingComparatorOperatorError, Result},
+    syntactical_analysis::error::{ParseError, Result},
     ast::*,
 };
 
@@ -71,10 +71,7 @@ impl<'a> Parser<'a> {
         if self.check_ttype(expected) {
             Ok(self.advance_token())
         } else {
-            Err(ParseError::BadToken(BadTokenError {
-                message: message_func(),
-                token: self.advance_token(),
-            }))
+            Err(ParseError::BadToken {message: message_func(), token: self.advance_token()})
         }
     }
 
@@ -88,10 +85,7 @@ impl<'a> Parser<'a> {
                 return Ok(self.advance_token());
             }
         }
-        Err(ParseError::BadToken(BadTokenError {
-            message: message_func(),
-            token: self.advance_token(),
-        }))
+        Err(ParseError::BadToken {message: message_func(), token: self.advance_token()})
     }
 
     pub fn parse_program(&self) -> Result<Expr<'a>> {
@@ -170,10 +164,10 @@ impl<'a> Parser<'a> {
             ));
         }
 
-        Err(ParseError::BadToken(BadTokenError {
+        Err(ParseError::BadToken {
             token: self.advance_token(),
             message: "expected either 'else-if', 'else' or 'end' after then-clause".into(),
-        }))
+        })
     }
 
     fn finish_print_expression(&self, print_token: Token<'a>) -> Result<Expr<'a>> {
@@ -200,7 +194,7 @@ impl<'a> Parser<'a> {
             let right_expr = self.parse_and()?;
  
             if let Some(chained_operator) = self.check_advance(TokenType::SemicolonEqual) {
-                return Err(ParseError::ChainingAssignmentOperator(ChainingAssignmentOperatorError { operator_token: chained_operator }));
+                return Err(ParseError::ChainingAssignmentOperator { operator: chained_operator });
             }
 
             return Ok(InfixExpr::new(self.arena, expr, assignment_operator, right_expr));
@@ -235,7 +229,7 @@ impl<'a> Parser<'a> {
             let right_expr = self.parse_addition()?;
  
             if let Some(chained_operator) = self.check_advance_any(token_groups::COMPARISON_OPERATORS) {
-                return Err(ParseError::ChainingComparisonOperator(ChainingComparatorOperatorError { operator_token: chained_operator }));
+                return Err(ParseError::ChainingComparisonOperator { operator: chained_operator });
             }
 
             return Ok(InfixExpr::new(self.arena, expr, operator, right_expr));
@@ -311,10 +305,7 @@ impl<'a> Parser<'a> {
 
             TokenType::Print => self.finish_print_expression(self.advance_token()),
 
-            _ => Err(ParseError::BadToken(BadTokenError {
-                token: self.peek_token(),
-                message: "expected some expression here".into(),
-            })),
+            _ => Err(ParseError::BadToken {token: self.peek_token(), message: "expected some expression here".into()}),
         }
     }
 }

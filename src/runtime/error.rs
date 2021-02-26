@@ -1,11 +1,12 @@
-#[derive(Debug, Clone)]
-pub enum RuntimeError {
-    TypeError(TypeError),
-}
+use thiserror::Error;
 
-#[derive(Debug, Clone)]
-pub struct TypeError {
-    pub message: String,
+#[derive(Debug, Error)]
+pub enum RuntimeError {
+    
+    #[error("TypeError: {}", .message)]
+    TypeError {
+        message: String,
+    }
 }
 
 pub type Result<T> = std::result::Result<T, RuntimeError>;
