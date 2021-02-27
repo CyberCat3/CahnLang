@@ -41,9 +41,39 @@ impl<'a> Lexer<'a> {
 
                 // skip comments
                 Some(c) if c == '#' => {
-                    while !self.mmatch('\n') {
-                        self.advance();
+                    self.advance(); // skip '#'
+                    if self.mmatch('/') {
+                        let mut comment_level = 1;
+
+                        while comment_level > 0 {
+                            let c = self.advance();
+                            let pc = self.peek_char();
+
+                            match (c, pc) {
+                                // If we encounter a close comment, go higher
+                                (Some('/'), Some('#')) => {
+                                    comment_level -= 1;
+                                    self.advance(); // skip '#'
+                                },
+                                // If we encounter a start comment, go deeper
+                                (Some('#'), Some('/')) => {
+                                    comment_level += 1;
+                                    self.advance(); // '/'
+                                }
+                                // if we encounter some other sequence of characters, carry on
+                                (Some(_), Some(_)) => {},
+
+                                // if some of them were none, we ran out of characters and should stop
+                                _ => break,
+                            }
+                        }
+
+                    } else {
+                        while !self.mmatch('\n') {
+                            self.advance();
+                        }
                     }
+
                 }
                 _ => break,
             }
@@ -102,6 +132,7 @@ impl<'a> Lexer<'a> {
             "and" => TokenType::And,
             "or" => TokenType::Or,
             "not" => TokenType::Not,
+            "block" => TokenType::Block,
             _ => TokenType::Identifier,
         };
         token

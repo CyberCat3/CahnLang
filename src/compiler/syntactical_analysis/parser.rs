@@ -101,19 +101,19 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_expression_list(&self) -> Result<Expr<'a>> {
-        let expr = self.parse_expression()?;
-
-        if self.check_ttype_any(token_groups::BLOCK_ENDINGS) {
-            return Ok(expr);
-        }
-
-        let mut exprs = bumpalo::vec![in self.arena; expr];
+        let mut exprs = bumpalo::vec![in self.arena; self.parse_expression()?];
 
         while !self.check_ttype_any(token_groups::BLOCK_ENDINGS) {
             exprs.push(self.parse_expression()?);
         }
 
         Ok(ExprList::new(self.arena, exprs))
+    }
+
+    fn finish_block_expr(&self, block_token: Token<'a>) -> Result<Expr<'a>> {
+        let content = self.parse_expression_list()?;
+        let end_token = self.expect(TokenType::End, || "expected 'end' to close explicit block".into())?;
+        Ok(BlockExpr::new(self.arena, block_token, content, end_token))
     }
 
     fn finish_var_decl_expresion(&self, var_token: Token<'a>) -> Result<Expr<'a>> {
@@ -321,6 +321,8 @@ impl<'a> Parser<'a> {
             TokenType::If => self.finish_if_expression(self.advance_token()),
 
             TokenType::Print => self.finish_print_expression(self.advance_token()),
+
+            TokenType::Block => self.finish_block_expr(self.advance_token()),
 
             _ => Err(ParseError::BadToken {
                 token: self.peek_token(),

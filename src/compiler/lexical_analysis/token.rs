@@ -29,6 +29,7 @@ pub enum TokenType {
     Greater,
     GreaterEqual,
 
+    Block,
     If,
     Then,
     ElseIf,

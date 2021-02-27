@@ -2,7 +2,6 @@ const exprs = [
     {
         name: "NumberExpr",
         ename: "Number",
-        nname: "number_expr",
         format: "{}", fargs: "e.token.lexeme",
         fields: {
             token: "Token",
@@ -12,7 +11,6 @@ const exprs = [
     {
         name: "VarExpr",
         ename: "Var",
-        nname: "var_expr",
         format: "{}", fargs: "e.identifier.lexeme",
         fields: {
             identifier: "Token",
@@ -21,7 +19,6 @@ const exprs = [
     {
         name: "BoolExpr",
         ename: "Bool",
-        nname: "bool_expr",
         format: "{}", fargs: "e.token.lexeme",
         fields: {
             token: "Token",
@@ -31,7 +28,6 @@ const exprs = [
     {
         name: "GroupExpr",
         ename: "Group",
-        nname: "group_expr",
         format: "({})", fargs: "e.inner",
         fields: {
             paren_open: "Token",
@@ -42,7 +38,6 @@ const exprs = [
     {
         name: "PrefixExpr",
         ename: "Prefix",
-        nname: "prefix_expr",
         format: "({} {})", fargs: "e.operator.lexeme, e.inner",
         fields: {
             operator: "Token",
@@ -52,7 +47,6 @@ const exprs = [
     {
         name: "InfixExpr",
         ename: "Infix",
-        nname: "infix_expr",
         format: "({} {} {})", fargs: "e.operator.lexeme, e.left, e.right",
         fields: {
             left: "Expr",
@@ -63,7 +57,6 @@ const exprs = [
     {
         name: "PrintExpr",
         ename: "Print",
-        nname: "print_expr",
         format: "(print {})", fargs: "e.inner",
         fields: {
             print_token: "Token",
@@ -73,7 +66,6 @@ const exprs = [
     {
         name: "VarDeclExpr",
         ename: "VarDecl",
-        nname: "var_decl_expr",
         format: "({} {} {})", fargs: "e.var_token.lexeme, e.identifier.lexeme, e.init_expr",
         fields: {
             var_token: "Token",
@@ -82,9 +74,18 @@ const exprs = [
         }
     },
     {
+        name: "BlockExpr",
+        ename: "Block",
+        format: "(block {})", fargs: "e.inner_expr",
+        fields: {
+            open_token: "Token",
+            inner_expr: "Expr",
+            close_token: "Token",
+        }
+    },
+    {
         name: "ExprList",
         ename: "ExprList",
-        nname: "expr_list",
         format_custom: `{
                 for expr in &e.exprs {
                     fmt::Display::fmt(expr, f)?;
@@ -98,7 +99,6 @@ const exprs = [
     {
         name: "ProgramExpr",
         ename: "Program",
-        nname: "program_expr",
         format: "(program {})", fargs: "e.inner",
         fields: {
             inner: "Expr",
@@ -108,7 +108,6 @@ const exprs = [
     {
         name: "IfExpr",
         ename: "If",
-        nname: "if_expr",
         format_custom: `{
                 f.write_fmt(format_args!("(if {} then {}", e.condition, e.then_clause))?;
                 if let Some(ec) = &e.else_clause {

@@ -9,7 +9,17 @@ pub enum Instruction {
 
     Not,
 
-    LoadNumber,
+    LoadConstNum,
+    LoadConstNumW,
+    LoadConstNumWW,
+
+    SetLocal,
+    SetLocalW,
+    GetLocal,
+    GetLocalW,
+
+    LoadLitNum,
+
     LoadTrue,
     LoadFalse,
     LoadNil,
