@@ -32,18 +32,24 @@ impl<'a> fmt::Display for Expr<'_> {
 
             Expr::Prefix(e) => f.write_fmt(format_args!("({} {})", e.operator.lexeme, e.inner))?,
 
-            Expr::Infix(e) => f.write_fmt(format_args!("({} {} {})", e.operator.lexeme, e.left, e.right))?,
+            Expr::Infix(e) => f.write_fmt(format_args!(
+                "({} {} {})",
+                e.operator.lexeme, e.left, e.right
+            ))?,
 
             Expr::Print(e) => f.write_fmt(format_args!("(print {})", e.inner))?,
 
-            Expr::VarDecl(e) => f.write_fmt(format_args!("({} {} {})", e.var_token.lexeme, e.identifier.lexeme, e.init_expr))?,
+            Expr::VarDecl(e) => f.write_fmt(format_args!(
+                "({} {} {})",
+                e.var_token.lexeme, e.identifier.lexeme, e.init_expr
+            ))?,
 
             Expr::ExprList(e) => {
                 for expr in &e.exprs {
                     fmt::Display::fmt(expr, f)?;
-                    f.write_char('\n')?;       
-                };
-            },
+                    f.write_char('\n')?;
+                }
+            }
 
             Expr::Program(e) => f.write_fmt(format_args!("(program {})", e.inner))?,
 
@@ -53,15 +59,15 @@ impl<'a> fmt::Display for Expr<'_> {
                     f.write_fmt(format_args!(" else {}", ec))?;
                 }
                 f.write_char(')')?;
-            },
+            }
         }
-    Ok(())
+        Ok(())
     }
 }
 #[derive(Debug, Clone)]
 pub struct NumberExpr<'a> {
-    token: Token<'a>,
-    number: f64,
+    pub token: Token<'a>,
+    pub number: f64,
 }
 impl<'a> NumberExpr<'a> {
     pub fn new(arena: &'a bumpalo::Bump, token: Token<'a>, number: f64) -> Expr<'a> {
@@ -71,7 +77,7 @@ impl<'a> NumberExpr<'a> {
 
 #[derive(Debug, Clone)]
 pub struct VarExpr<'a> {
-    identifier: Token<'a>,
+    pub identifier: Token<'a>,
 }
 impl<'a> VarExpr<'a> {
     pub fn new(arena: &'a bumpalo::Bump, identifier: Token<'a>) -> Expr<'a> {
@@ -81,8 +87,8 @@ impl<'a> VarExpr<'a> {
 
 #[derive(Debug, Clone)]
 pub struct BoolExpr<'a> {
-    token: Token<'a>,
-    value: bool,
+    pub token: Token<'a>,
+    pub value: bool,
 }
 impl<'a> BoolExpr<'a> {
     pub fn new(arena: &'a bumpalo::Bump, token: Token<'a>, value: bool) -> Expr<'a> {
@@ -92,20 +98,29 @@ impl<'a> BoolExpr<'a> {
 
 #[derive(Debug, Clone)]
 pub struct GroupExpr<'a> {
-    paren_open: Token<'a>,
-    inner: Expr<'a>,
-    paren_close: Token<'a>,
+    pub paren_open: Token<'a>,
+    pub inner: Expr<'a>,
+    pub paren_close: Token<'a>,
 }
 impl<'a> GroupExpr<'a> {
-    pub fn new(arena: &'a bumpalo::Bump, paren_open: Token<'a>, inner: Expr<'a>, paren_close: Token<'a>) -> Expr<'a> {
-        Expr::Group(arena.alloc_with(|| GroupExpr { paren_open, inner, paren_close }))
+    pub fn new(
+        arena: &'a bumpalo::Bump,
+        paren_open: Token<'a>,
+        inner: Expr<'a>,
+        paren_close: Token<'a>,
+    ) -> Expr<'a> {
+        Expr::Group(arena.alloc_with(|| GroupExpr {
+            paren_open,
+            inner,
+            paren_close,
+        }))
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct PrefixExpr<'a> {
-    operator: Token<'a>,
-    inner: Expr<'a>,
+    pub operator: Token<'a>,
+    pub inner: Expr<'a>,
 }
 impl<'a> PrefixExpr<'a> {
     pub fn new(arena: &'a bumpalo::Bump, operator: Token<'a>, inner: Expr<'a>) -> Expr<'a> {
@@ -115,20 +130,29 @@ impl<'a> PrefixExpr<'a> {
 
 #[derive(Debug, Clone)]
 pub struct InfixExpr<'a> {
-    left: Expr<'a>,
-    operator: Token<'a>,
-    right: Expr<'a>,
+    pub left: Expr<'a>,
+    pub operator: Token<'a>,
+    pub right: Expr<'a>,
 }
 impl<'a> InfixExpr<'a> {
-    pub fn new(arena: &'a bumpalo::Bump, left: Expr<'a>, operator: Token<'a>, right: Expr<'a>) -> Expr<'a> {
-        Expr::Infix(arena.alloc_with(|| InfixExpr { left, operator, right }))
+    pub fn new(
+        arena: &'a bumpalo::Bump,
+        left: Expr<'a>,
+        operator: Token<'a>,
+        right: Expr<'a>,
+    ) -> Expr<'a> {
+        Expr::Infix(arena.alloc_with(|| InfixExpr {
+            left,
+            operator,
+            right,
+        }))
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct PrintExpr<'a> {
-    print_token: Token<'a>,
-    inner: Expr<'a>,
+    pub print_token: Token<'a>,
+    pub inner: Expr<'a>,
 }
 impl<'a> PrintExpr<'a> {
     pub fn new(arena: &'a bumpalo::Bump, print_token: Token<'a>, inner: Expr<'a>) -> Expr<'a> {
@@ -138,19 +162,28 @@ impl<'a> PrintExpr<'a> {
 
 #[derive(Debug, Clone)]
 pub struct VarDeclExpr<'a> {
-    var_token: Token<'a>,
-    identifier: Token<'a>,
-    init_expr: Expr<'a>,
+    pub var_token: Token<'a>,
+    pub identifier: Token<'a>,
+    pub init_expr: Expr<'a>,
 }
 impl<'a> VarDeclExpr<'a> {
-    pub fn new(arena: &'a bumpalo::Bump, var_token: Token<'a>, identifier: Token<'a>, init_expr: Expr<'a>) -> Expr<'a> {
-        Expr::VarDecl(arena.alloc_with(|| VarDeclExpr { var_token, identifier, init_expr }))
+    pub fn new(
+        arena: &'a bumpalo::Bump,
+        var_token: Token<'a>,
+        identifier: Token<'a>,
+        init_expr: Expr<'a>,
+    ) -> Expr<'a> {
+        Expr::VarDecl(arena.alloc_with(|| VarDeclExpr {
+            var_token,
+            identifier,
+            init_expr,
+        }))
     }
 }
 
 #[derive(Debug, Clone)]
 pub struct ExprList<'a> {
-    exprs: Vec<'a, Expr<'a>>,
+    pub exprs: Vec<'a, Expr<'a>>,
 }
 impl<'a> ExprList<'a> {
     pub fn new(arena: &'a bumpalo::Bump, exprs: Vec<'a, Expr<'a>>) -> Expr<'a> {
@@ -160,8 +193,8 @@ impl<'a> ExprList<'a> {
 
 #[derive(Debug, Clone)]
 pub struct ProgramExpr<'a> {
-    inner: Expr<'a>,
-    eof_token: Token<'a>,
+    pub inner: Expr<'a>,
+    pub eof_token: Token<'a>,
 }
 impl<'a> ProgramExpr<'a> {
     pub fn new(arena: &'a bumpalo::Bump, inner: Expr<'a>, eof_token: Token<'a>) -> Expr<'a> {
@@ -171,15 +204,27 @@ impl<'a> ProgramExpr<'a> {
 
 #[derive(Debug, Clone)]
 pub struct IfExpr<'a> {
-    if_token: Token<'a>,
-    condition: Expr<'a>,
-    then_clause: Expr<'a>,
-    else_clause: Option<Expr<'a>>,
-    end_token: Token<'a>,
+    pub if_token: Token<'a>,
+    pub condition: Expr<'a>,
+    pub then_clause: Expr<'a>,
+    pub else_clause: Option<Expr<'a>>,
+    pub end_token: Token<'a>,
 }
 impl<'a> IfExpr<'a> {
-    pub fn new(arena: &'a bumpalo::Bump, if_token: Token<'a>, condition: Expr<'a>, then_clause: Expr<'a>, else_clause: Option<Expr<'a>>, end_token: Token<'a>) -> Expr<'a> {
-        Expr::If(arena.alloc_with(|| IfExpr { if_token, condition, then_clause, else_clause, end_token }))
+    pub fn new(
+        arena: &'a bumpalo::Bump,
+        if_token: Token<'a>,
+        condition: Expr<'a>,
+        then_clause: Expr<'a>,
+        else_clause: Option<Expr<'a>>,
+        end_token: Token<'a>,
+    ) -> Expr<'a> {
+        Expr::If(arena.alloc_with(|| IfExpr {
+            if_token,
+            condition,
+            then_clause,
+            else_clause,
+            end_token,
+        }))
     }
 }
-

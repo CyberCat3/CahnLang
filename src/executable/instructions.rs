@@ -22,6 +22,6 @@ pub enum Instruction {
 
     Dup,
     Pop,
-    
+
     Print,
 }

@@ -50,7 +50,8 @@ pub mod token_groups {
 
     pub const LITERALS: &[TokenType] = &[Number, True, False];
     pub const BLOCK_ENDINGS: &[TokenType] = &[End, Else, ElseIf, Eof];
-    pub const COMPARISON_OPERATORS: &[TokenType] = &[Equal, Less, LessEqual, Greater, GreaterEqual, BangEqual];
+    pub const COMPARISON_OPERATORS: &[TokenType] =
+        &[Equal, Less, LessEqual, Greater, GreaterEqual, BangEqual];
     pub const PREFIX_OPERATORS: &[TokenType] = &[Not, Minus];
 }
 

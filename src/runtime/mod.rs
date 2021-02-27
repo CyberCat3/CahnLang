@@ -1,6 +1,6 @@
-pub mod vm;
-pub mod value;
 pub mod error;
+pub mod value;
+pub mod vm;
 
-pub use vm::VM as VM;
-pub use value::Value as Value;
+pub use value::Value;
+pub use vm::VM;

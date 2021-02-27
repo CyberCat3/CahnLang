@@ -1,5 +1,5 @@
-use std::cell::Cell;
 use super::{Token, TokenType};
+use std::cell::Cell;
 
 #[derive(Debug, Clone)]
 pub struct Lexer<'a> {

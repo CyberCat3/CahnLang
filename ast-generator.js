@@ -174,7 +174,7 @@ pub struct ${expr.name}<'a> {\n`);
         
     for (const key of Object.keys(expr.fields)) {
         const val = expr.fields[key];
-        output.push(`    ${key}: ${val}`);
+        output.push(`    pub ${key}: ${val}`);
         if (val.endsWith("Token") || val.endsWith("Expr")) output.push("<'a>");
         output.push(",\n");
     }
