@@ -7,7 +7,7 @@ pub enum Instruction {
     Div,
     Negate,
 
-    NotBool,
+    Not,
 
     LoadNumber,
     LoadTrue,
@@ -19,9 +19,6 @@ pub enum Instruction {
     LessThanOrEqual,
     GreaterThanOrEqual,
     Equal,
-
-    OrBool,
-    AndBool,
 
     Dup,
     Pop,

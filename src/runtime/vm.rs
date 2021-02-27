@@ -55,6 +55,10 @@ impl VM {
                     self.push(Value::Number(self.exec.num_consts[num_index as usize]));  
                 },
 
+                Instruction::LoadTrue => self.push(Value::Bool(true)),
+                Instruction::LoadFalse => self.push(Value::Bool(false)),
+                Instruction::LoadNil => self.push(Value::Nil),
+
                 Instruction::Add => {
                     let right = self.pop();
                     let left = self.pop();
@@ -102,24 +106,64 @@ impl VM {
                     let left = self.pop();
 
                     match (left, right) {
-                        (Value::Number(left_num), Value::Number(right_val)) => {
-                            self.push(Value::Number(left_num / right_val));
-                        },
-                        _ => {
-                            return Err(RuntimeError::TypeError {message: format!("division-instruction expected two numbers, but got '{}' and '{}'", left, right)});
-                        }
+                        (Value::Number(left_num), Value::Number(right_val)) => self.push(Value::Number(left_num / right_val)),
+                        _ => return Err(RuntimeError::TypeError {message: format!("division-instruction expected two numbers, but got '{}' and '{}'", left, right)}),
                     }
                 },
                 
-                Instruction::Negate => unimplemented!(),
-                Instruction::NotBool => unimplemented!(),
-                Instruction::LoadTrue => self.push(Value::Bool(true)),
-                Instruction::LoadFalse => self.push(Value::Bool(false)),
-                Instruction::LoadNil => self.push(Value::Nil),
-                Instruction::LessThan => unimplemented!(),
-                Instruction::GreaterThan => unimplemented!(),
-                Instruction::LessThanOrEqual => unimplemented!(),
-                Instruction::GreaterThanOrEqual => unimplemented!(),
+                Instruction::Negate => {
+                    let val = self.pop();
+
+                    match val {
+                        Value::Number(num) => self.push(Value::Number(-num)),
+                        _ => return Err(RuntimeError::TypeError {message: format!("negate-instruction expected a number, but got '{}'", val)})
+                    };
+                },
+                
+                Instruction::Not => {
+                    let val = self.pop();
+                    self.push(Value::Bool(!val.is_truthy()));
+                },
+
+                Instruction::LessThan => {
+                    let right = self.pop();
+                    let left = self.pop();
+
+                    match (left, right) {
+                        (Value::Number(left_num), Value::Number(right_val)) => self.push(Value::Bool(left_num < right_val)),
+                        _ => return Err(RuntimeError::TypeError {message: format!("'<' operator expected two numbers, but got '{}' and '{}'", left, right)}),
+                    }
+                },
+
+                Instruction::LessThanOrEqual => {
+                    let right = self.pop();
+                    let left = self.pop();
+
+                    match (left, right) {
+                        (Value::Number(left_num), Value::Number(right_val)) => self.push(Value::Bool(left_num <= right_val)),
+                        _ => return Err(RuntimeError::TypeError {message: format!("'<=' operator expected two numbers, but got '{}' and '{}'", left, right)}),
+                    }
+                },
+
+                Instruction::GreaterThan => {
+                    let right = self.pop();
+                    let left = self.pop();
+
+                    match (left, right) {
+                        (Value::Number(left_num), Value::Number(right_val)) => self.push(Value::Bool(left_num > right_val)),
+                        _ => return Err(RuntimeError::TypeError {message: format!("'>' operator expected two numbers, but got '{}' and '{}'", left, right)}),
+                    }
+                },
+
+                Instruction::GreaterThanOrEqual => {
+                    let right = self.pop();
+                    let left = self.pop();
+
+                    match (left, right) {
+                        (Value::Number(left_num), Value::Number(right_val)) => self.push(Value::Bool(left_num >= right_val)),
+                        _ => return Err(RuntimeError::TypeError {message: format!("'>=' operator expected two numbers, but got '{}' and '{}'", left, right)}),
+                    }
+                },
                 
                 Instruction::Equal => {
                     let right = self.pop();
@@ -127,9 +171,6 @@ impl VM {
 
                     self.push(Value::Bool(left == right));
                 },
-                
-                Instruction::OrBool => unimplemented!(),
-                Instruction::AndBool => unimplemented!(),
                 
                 Instruction::Dup => {
                     let val = self.peek();
