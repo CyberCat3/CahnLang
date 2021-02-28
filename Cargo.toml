@@ -10,3 +10,8 @@ edition = "2018"
 thiserror = "*"
 ahash = "*"
 bumpalo= { version = "*", features = [ "collections" ] }
+smol_str = "*"
+intmap = "*"
+
+[profile.release]
+lto = "on"

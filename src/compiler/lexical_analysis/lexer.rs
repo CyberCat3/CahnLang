@@ -1,19 +1,64 @@
+use crate::compiler::string_handling::{StringAtom, StringInterner};
+
 use super::{Token, TokenType};
 use std::cell::Cell;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Lexer<'a> {
     source_string: &'a str,
     start_index: Cell<usize>,
     current_index: Cell<usize>,
+    interner: StringInterner,
+    keyword_atoms: KeywordAtoms,
+}
+
+#[derive(Debug)]
+struct KeywordAtoms {
+    k_let: StringAtom,
+    k_nil: StringAtom,
+    k_if: StringAtom,
+    k_elseif: StringAtom,
+    k_else: StringAtom,
+    k_end: StringAtom,
+    k_then: StringAtom,
+    k_print: StringAtom,
+    k_true: StringAtom,
+    k_false: StringAtom,
+    k_and: StringAtom,
+    k_or: StringAtom,
+    k_not: StringAtom,
+    k_block: StringAtom,
+}
+
+impl KeywordAtoms {
+    fn with_interner(interner: &StringInterner) -> Self {
+        KeywordAtoms {
+            k_let: interner.intern("let"),
+            k_nil: interner.intern("nil"),
+            k_if: interner.intern("if"),
+            k_elseif: interner.intern("elseif"),
+            k_else: interner.intern("else"),
+            k_end: interner.intern("end"),
+            k_then: interner.intern("then"),
+            k_print: interner.intern("print"),
+            k_true: interner.intern("true"),
+            k_false: interner.intern("false"),
+            k_and: interner.intern("and"),
+            k_or: interner.intern("or"),
+            k_not: interner.intern("not"),
+            k_block: interner.intern("block"),
+        }
+    }
 }
 
 impl<'a> Lexer<'a> {
-    pub fn new(source_string: &'a str) -> Self {
+    pub fn new(source_string: &'a str, interner: StringInterner) -> Self {
         Lexer {
             source_string,
             start_index: Cell::new(0),
             current_index: Cell::new(0),
+            keyword_atoms: KeywordAtoms::with_interner(&interner),
+            interner,
         }
     }
 
@@ -54,37 +99,37 @@ impl<'a> Lexer<'a> {
                                 (Some('/'), Some('#')) => {
                                     comment_level -= 1;
                                     self.advance(); // skip '#'
-                                },
+                                }
                                 // If we encounter a start comment, go deeper
                                 (Some('#'), Some('/')) => {
                                     comment_level += 1;
                                     self.advance(); // '/'
                                 }
                                 // if we encounter some other sequence of characters, carry on
-                                (Some(_), Some(_)) => {},
+                                (Some(_), Some(_)) => {}
 
                                 // if some of them were none, we ran out of characters and should stop
                                 _ => break,
                             }
                         }
-
                     } else {
                         while !self.mmatch('\n') {
                             self.advance();
                         }
                     }
-
                 }
                 _ => break,
             }
         }
     }
 
-    fn make_token(&self, token_type: TokenType) -> Token<'a> {
+    fn make_token(&self, token_type: TokenType) -> Token {
         Token {
             index: self.start_index.get(),
             token_type,
-            lexeme: &self.source_string[self.start_index.get()..self.current_index.get()],
+            lexeme: self
+                .interner
+                .intern(&self.source_string[self.start_index.get()..self.current_index.get()]),
         }
     }
 
@@ -101,7 +146,7 @@ impl<'a> Lexer<'a> {
         }
     }
 
-    fn finish_number(&self) -> Token<'a> {
+    fn finish_number(&self) -> Token {
         while matches!(self.peek_char(), Some(c) if c.is_ascii_digit()) {
             self.advance();
         }
@@ -112,33 +157,35 @@ impl<'a> Lexer<'a> {
         self.make_token(TokenType::Number)
     }
 
-    fn finish_identifier(&self) -> Token<'a> {
+    fn finish_identifier(&self) -> Token {
         while matches!(self.peek_char(), Some(c) if c.is_alphanumeric()) {
             self.advance();
         }
         let mut token = self.make_token(TokenType::Identifier);
 
-        token.token_type = match token.lexeme {
-            "let" => TokenType::Let,
-            "nil" => TokenType::Nil,
-            "if" => TokenType::If,
-            "elseif" => TokenType::ElseIf,
-            "else" => TokenType::Else,
-            "end" => TokenType::End,
-            "then" => TokenType::Then,
-            "print" => TokenType::Print,
-            "true" => TokenType::True,
-            "false" => TokenType::False,
-            "and" => TokenType::And,
-            "or" => TokenType::Or,
-            "not" => TokenType::Not,
-            "block" => TokenType::Block,
+        let keywords = &self.keyword_atoms;
+
+        token.token_type = match &token.lexeme {
+            w if w == &keywords.k_let => TokenType::Let,
+            w if w == &keywords.k_nil => TokenType::Nil,
+            w if w == &keywords.k_if => TokenType::If,
+            w if w == &keywords.k_elseif => TokenType::ElseIf,
+            w if w == &keywords.k_else => TokenType::Else,
+            w if w == &keywords.k_end => TokenType::End,
+            w if w == &keywords.k_then => TokenType::Then,
+            w if w == &keywords.k_print => TokenType::Print,
+            w if w == &keywords.k_true => TokenType::True,
+            w if w == &keywords.k_false => TokenType::False,
+            w if w == &keywords.k_and => TokenType::And,
+            w if w == &keywords.k_or => TokenType::Or,
+            w if w == &keywords.k_not => TokenType::Not,
+            w if w == &keywords.k_block => TokenType::Block,
             _ => TokenType::Identifier,
         };
         token
     }
 
-    pub fn lex_token(&self) -> Token<'a> {
+    pub fn lex_token(&self) -> Token {
         self.skip_whitespace();
         self.start_index.set(self.current_index.get());
 
@@ -196,11 +243,14 @@ impl<'a> Lexer<'a> {
 #[cfg(test)]
 mod tests {
     use super::{Lexer, TokenType};
+    use crate::compiler::string_handling::StringInterner;
 
     #[test]
     fn lexing_test() {
         let source = "2 + 3 -     1";
-        let lexer = Lexer::new(source);
+        let interner = StringInterner::new();
+
+        let lexer = Lexer::new(source, interner);
         assert_eq!(lexer.lex_token().token_type, TokenType::Number);
         assert_eq!(lexer.lex_token().token_type, TokenType::Plus);
         assert_eq!(lexer.lex_token().token_type, TokenType::Number);

@@ -1,5 +1,5 @@
 use cahn_lang::{
-    compiler::{CodeGenerator, Parser},
+    compiler::{string_handling::StringInterner, CodeGenerator, Parser},
     runtime::{Value, VM},
 };
 
@@ -9,7 +9,8 @@ fn full_run_math() {
     println!("source: {}", source);
 
     let arena = bumpalo::Bump::new();
-    let parser = Parser::from_str(source, &arena);
+    let interner = StringInterner::new();
+    let parser = Parser::from_str(source, &arena, interner);
     let ast = parser.parse_program().unwrap();
     println!("ast: {}", ast);
 
@@ -27,8 +28,6 @@ fn full_run_math() {
     assert_eq!(result, vec![Value::Number(4.75)]);
 }
 
-
-
 #[test]
 fn full_run_add_and_block() {
     let source = "
@@ -44,7 +43,8 @@ fn full_run_add_and_block() {
     println!("source: {}", source);
 
     let arena = bumpalo::Bump::new();
-    let parser = Parser::from_str(source, &arena);
+    let interner = StringInterner::new();
+    let parser = Parser::from_str(source, &arena, interner);
     let ast = parser.parse_program().unwrap();
 
     let exec = CodeGenerator::new().gen(&ast).unwrap();

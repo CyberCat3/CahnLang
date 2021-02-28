@@ -1,14 +1,17 @@
+use string_handling::StringInterner;
+
 use crate::compiler::{
     ast::*,
     lexical_analysis::{token_groups, Lexer, Token, TokenType},
+    string_handling,
     syntactical_analysis::error::{ParseError, Result},
 };
-use std::cell::Cell;
+use std::cell::RefCell;
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
-    peek_token: Cell<Token<'a>>,
+    peek_token: RefCell<Token>,
     arena: &'a bumpalo::Bump,
 }
 
@@ -18,22 +21,22 @@ impl<'a> Parser<'a> {
         Parser {
             lexer,
             arena,
-            peek_token: Cell::new(t),
+            peek_token: RefCell::new(t),
         }
     }
 
-    pub fn from_str(source: &'a str, arena: &'a bumpalo::Bump) -> Self {
-        let lexer = Lexer::new(source);
+    pub fn from_str(source: &'a str, arena: &'a bumpalo::Bump, interner: StringInterner) -> Self {
+        let lexer = Lexer::new(source, interner);
         Self::new(lexer, arena)
     }
 
-    fn peek_token(&self) -> Token<'a> {
-        self.peek_token.get()
+    fn peek_token(&self) -> Token {
+        self.peek_token.borrow().clone()
     }
 
-    fn advance_token(&self) -> Token<'a> {
+    fn advance_token(&self) -> Token {
         let peek_token = self.peek_token();
-        self.peek_token.set(self.lexer.lex_token());
+        *self.peek_token.borrow_mut() = self.lexer.lex_token();
         peek_token
     }
 
@@ -45,7 +48,7 @@ impl<'a> Parser<'a> {
         expected.iter().any(|etype| self.check_ttype(*etype))
     }
 
-    fn check_advance(&self, expected: TokenType) -> Option<Token<'a>> {
+    fn check_advance(&self, expected: TokenType) -> Option<Token> {
         if self.check_ttype(expected) {
             Some(self.advance_token())
         } else {
@@ -53,7 +56,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn check_advance_any(&self, expected: &[TokenType]) -> Option<Token<'a>> {
+    fn check_advance_any(&self, expected: &[TokenType]) -> Option<Token> {
         for etype in expected {
             match self.check_advance(*etype) {
                 Some(t) => return Some(t),
@@ -63,11 +66,7 @@ impl<'a> Parser<'a> {
         None
     }
 
-    fn expect<T: FnOnce() -> String>(
-        &self,
-        expected: TokenType,
-        message_func: T,
-    ) -> Result<Token<'a>> {
+    fn expect<T: FnOnce() -> String>(&self, expected: TokenType, message_func: T) -> Result<Token> {
         if self.check_ttype(expected) {
             Ok(self.advance_token())
         } else {
@@ -78,21 +77,21 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn expect_any<T: FnOnce() -> String>(
-        &self,
-        expected: &[TokenType],
-        message_func: T,
-    ) -> Result<Token<'a>> {
-        for etype in expected {
-            if self.check_ttype(*etype) {
-                return Ok(self.advance_token());
-            }
-        }
-        Err(ParseError::BadToken {
-            message: message_func(),
-            token: self.advance_token(),
-        })
-    }
+    // fn expect_any<T: FnOnce() -> String>(
+    //     &self,
+    //     expected: &[TokenType],
+    //     message_func: T,
+    // ) -> Result<Token> {
+    //     for etype in expected {
+    //         if self.check_ttype(*etype) {
+    //             return Ok(self.advance_token());
+    //         }
+    //     }
+    //     Err(ParseError::BadToken {
+    //         message: message_func(),
+    //         token: self.advance_token(),
+    //     })
+    // }
 
     pub fn parse_program(&self) -> Result<Expr<'a>> {
         let exprs = self.parse_expression_list()?;
@@ -110,13 +109,15 @@ impl<'a> Parser<'a> {
         Ok(ExprList::new(self.arena, exprs))
     }
 
-    fn finish_block_expr(&self, block_token: Token<'a>) -> Result<Expr<'a>> {
+    fn finish_block_expr(&self, block_token: Token) -> Result<Expr<'a>> {
         let content = self.parse_expression_list()?;
-        let end_token = self.expect(TokenType::End, || "expected 'end' to close explicit block".into())?;
+        let end_token = self.expect(TokenType::End, || {
+            "expected 'end' to close explicit block".into()
+        })?;
         Ok(BlockExpr::new(self.arena, block_token, content, end_token))
     }
 
-    fn finish_var_decl_expresion(&self, var_token: Token<'a>) -> Result<Expr<'a>> {
+    fn finish_var_decl_expresion(&self, var_token: Token) -> Result<Expr<'a>> {
         let ident = self.expect(TokenType::Identifier, || {
             "expected identifier after variable declaration".into()
         })?;
@@ -126,7 +127,7 @@ impl<'a> Parser<'a> {
         Ok(VarDeclExpr::new(self.arena, var_token, ident, expr))
     }
 
-    fn finish_if_expression(&self, if_token: Token<'a>) -> Result<Expr<'a>> {
+    fn finish_if_expression(&self, if_token: Token) -> Result<Expr<'a>> {
         let condition = self.parse_expression()?;
         let _then_token = self.expect(TokenType::Then, || {
             "expected 'then' after if-condition".into()
@@ -159,7 +160,7 @@ impl<'a> Parser<'a> {
         };
 
         if let Some(else_if_token) = self.check_advance(TokenType::ElseIf) {
-            let else_if_expr = self.finish_if_expression(else_if_token)?;
+            let else_if_expr = self.finish_if_expression(else_if_token.clone())?;
             return Ok(IfExpr::new(
                 self.arena,
                 if_token,
@@ -176,12 +177,12 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn finish_print_expression(&self, print_token: Token<'a>) -> Result<Expr<'a>> {
+    fn finish_print_expression(&self, print_token: Token) -> Result<Expr<'a>> {
         let expr = self.parse_expression()?;
         Ok(PrintExpr::new(self.arena, print_token, expr))
     }
 
-    fn finish_group_expression(&self, paren_open: Token<'a>) -> Result<Expr<'a>> {
+    fn finish_group_expression(&self, paren_open: Token) -> Result<Expr<'a>> {
         let expr = self.parse_expression()?;
         let paren_close = self.expect(TokenType::ParenClose, || {
             String::from("expected a closing parenthesis")
@@ -302,9 +303,11 @@ impl<'a> Parser<'a> {
     fn parse_atom(&self) -> Result<Expr<'a>> {
         if let Some(token) = self.check_advance_any(token_groups::LITERALS) {
             return Ok(match token.token_type {
-                TokenType::Number => {
-                    NumberExpr::new(self.arena, token, token.lexeme.parse::<f64>().unwrap())
-                }
+                TokenType::Number => NumberExpr::new(
+                    self.arena,
+                    token.clone(),
+                    token.lexeme.run_on_str(|str| str.parse()).unwrap(),
+                ),
                 TokenType::True => BoolExpr::new(self.arena, token, true),
                 TokenType::False => BoolExpr::new(self.arena, token, false),
                 _ => unreachable!(),

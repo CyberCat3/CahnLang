@@ -31,7 +31,7 @@ const exprs = [
         format: "({})", fargs: "e.inner",
         fields: {
             paren_open: "Token",
-            inner: "Expr",
+            inner: "Expr<'a>",
             paren_close: "Token",
         }
     },
@@ -41,7 +41,7 @@ const exprs = [
         format: "({} {})", fargs: "e.operator.lexeme, e.inner",
         fields: {
             operator: "Token",
-            inner: "Expr"
+            inner: "Expr<'a>"
         }
     },
     {
@@ -49,9 +49,9 @@ const exprs = [
         ename: "Infix",
         format: "({} {} {})", fargs: "e.operator.lexeme, e.left, e.right",
         fields: {
-            left: "Expr",
+            left: "Expr<'a>",
             operator: "Token",
-            right: "Expr",
+            right: "Expr<'a>",
         }
     },
     {
@@ -60,7 +60,7 @@ const exprs = [
         format: "(print {})", fargs: "e.inner",
         fields: {
             print_token: "Token",
-            inner: "Expr",
+            inner: "Expr<'a>",
         }
     },
     {
@@ -70,7 +70,7 @@ const exprs = [
         fields: {
             var_token: "Token",
             identifier: "Token",
-            init_expr: "Expr",
+            init_expr: "Expr<'a>",
         }
     },
     {
@@ -79,7 +79,7 @@ const exprs = [
         format: "(block {})", fargs: "e.inner_expr",
         fields: {
             open_token: "Token",
-            inner_expr: "Expr",
+            inner_expr: "Expr<'a>",
             close_token: "Token",
         }
     },
@@ -101,7 +101,7 @@ const exprs = [
         ename: "Program",
         format: "(program {})", fargs: "e.inner",
         fields: {
-            inner: "Expr",
+            inner: "Expr<'a>",
             eof_token: "Token"
         }
     },
@@ -117,8 +117,8 @@ const exprs = [
             },\n`,
         fields: {
             if_token: "Token",
-            condition: "Expr",
-            then_clause: "Expr",
+            condition: "Expr<'a>",
+            then_clause: "Expr<'a>",
             else_clause: "Option<Expr<'a>>",
             end_token: "Token",
         }
@@ -137,7 +137,7 @@ use bumpalo::collections::Vec;
 #[derive(Debug, Clone)]
 pub enum Expr<'a> {\n`);
 for (const expr of exprs) {
-    output.push(`    ${expr.ename}(&'a ${expr.name}<'a>),\n`)
+    output.push(`    ${expr.ename}(&'a ${expr.name}${structContainsLifeTime(expr) ? "<'a>" : ""}),\n`)
 }
 
 output.push(
@@ -166,28 +166,37 @@ output.push(
 }
 `);
 
+function structContainsLifeTime(struct) {
+    let structLifetime = false;
+    for (const val of Object.values(struct.fields)) {
+        if (val.includes("<'a>")) {
+            structLifetime = true;
+        }
+    }
+    return structLifetime;
+}
+
 for (const expr of exprs) {
+    const structLifetime = structContainsLifeTime(expr);
+
     output.push(
 `#[derive(Debug, Clone)]
-pub struct ${expr.name}<'a> {\n`);
+pub struct ${expr.name}${structLifetime ? "<'a>" : ""} {\n`);
         
     for (const key of Object.keys(expr.fields)) {
         const val = expr.fields[key];
-        output.push(`    pub ${key}: ${val}`);
-        if (val.endsWith("Token") || val.endsWith("Expr")) output.push("<'a>");
-        output.push(",\n");
+        output.push(`    pub ${key}: ${val},\n`);
     }
 
     output.push("}\n");
 
-    output.push(`impl<'a> ${expr.name}<'a> {\n    pub fn new(arena: &'a bumpalo::Bump, `);
+    output.push(`impl${structLifetime ? "<'a>" : ""} ${expr.name}${structLifetime ? "<'a>" : ""} {\n    pub fn new${structLifetime ? "" : "<'a>"}(arena: &'a bumpalo::Bump, `);
 
     const keys = Object.keys(expr.fields);
     for (let i = 0; i < keys.length; ++i) {
         const key = keys[i];
         const val = expr.fields[key];
         output.push(`${key}: ${val}`);
-        if (val.endsWith("Token") || val.endsWith("Expr")) output.push("<'a>");
         if (i + 1 < keys.length) output.push(", ");
     }
 

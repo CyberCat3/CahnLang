@@ -1,4 +1,7 @@
-use cahn_lang::{compiler::{CodeGenerator, Parser}, runtime::{VM, Value}};
+use cahn_lang::{
+    compiler::{string_handling::StringInterner, CodeGenerator, Parser},
+    runtime::{Value, VM},
+};
 
 #[test]
 fn big_num_load() {
@@ -23,7 +26,10 @@ block
 end";
 
     let arena = bumpalo::Bump::new();
-    let ast = Parser::from_str(source, &arena).parse_program().unwrap();
+    let interner = StringInterner::new();
+    let ast = Parser::from_str(source, &arena, interner)
+        .parse_program()
+        .unwrap();
 
     println!("ast: {}", ast);
 

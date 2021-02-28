@@ -6,7 +6,7 @@ use crate::{
     },
 };
 
-use std::{io::stdin, mem};
+use std::mem;
 
 #[derive(Debug, Clone)]
 pub struct VM<'a> {
@@ -18,7 +18,12 @@ pub struct VM<'a> {
 
 impl<'a> VM<'a> {
     pub fn new(exec: &'a Executable) -> Self {
-        VM { stack: Vec::new(), ip: 0, fp: 0, exec }
+        VM {
+            stack: Vec::new(),
+            ip: 0,
+            fp: 0,
+            exec,
+        }
     }
 
     #[inline]
@@ -52,10 +57,7 @@ impl<'a> VM<'a> {
     #[inline]
     fn read_u16(&mut self) -> u16 {
         let code = &self.exec.code;
-        let val = u16::from_le_bytes([
-            code[self.ip],
-            code[self.ip+1]
-        ]);
+        let val = u16::from_le_bytes([code[self.ip], code[self.ip + 1]]);
         self.ip += 2;
         val
     }
@@ -65,9 +67,9 @@ impl<'a> VM<'a> {
         let code = &self.exec.code;
         let val = u32::from_le_bytes([
             code[self.ip],
-            code[self.ip+1],
-            code[self.ip+2],
-            code[self.ip+3]
+            code[self.ip + 1],
+            code[self.ip + 2],
+            code[self.ip + 3],
         ]);
         self.ip += 4;
         val
@@ -147,12 +149,14 @@ impl<'a> VM<'a> {
                     (Value::Number(left_num), Value::Number(right_val)) => {
                         self.push(Value::Number(left_num - right_val))
                     }
-                    _ => return Err(RuntimeError::TypeError {
-                        message: format!(
-                            "subtract-instruction expected two numbers, but got '{}' and '{}'",
-                            left, right
-                        ),
-                    }),
+                    _ => {
+                        return Err(RuntimeError::TypeError {
+                            message: format!(
+                                "subtract-instruction expected two numbers, but got '{}' and '{}'",
+                                left, right
+                            ),
+                        })
+                    }
                 }
             }
 
@@ -174,12 +178,14 @@ impl<'a> VM<'a> {
                     (Value::Number(left_num), Value::Number(right_val)) => {
                         self.push(Value::Number(left_num / right_val))
                     }
-                    _ => return Err(RuntimeError::TypeError {
-                        message: format!(
-                            "division-instruction expected two numbers, but got '{}' and '{}'",
-                            left, right
-                        ),
-                    }),
+                    _ => {
+                        return Err(RuntimeError::TypeError {
+                            message: format!(
+                                "division-instruction expected two numbers, but got '{}' and '{}'",
+                                left, right
+                            ),
+                        })
+                    }
                 }
             }
 

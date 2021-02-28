@@ -2,7 +2,10 @@ pub mod instructions;
 
 pub use instructions::Instruction;
 
-use std::{fmt::{self, Write}, mem};
+use std::{
+    fmt::{self, Write},
+    mem,
+};
 
 #[derive(Debug, Clone)]
 pub struct Executable {
@@ -45,32 +48,32 @@ INSTRUCTIONS:\n",
                     let val = self.num_consts[index as usize];
                     f.write_fmt(format_args!("    {} '{}'", index, val))?;
                     i += 1;
-                },
+                }
                 Instruction::LoadConstNumW => {
-                    let index = u16::from_le_bytes([code[i], code[i+1]]);
+                    let index = u16::from_le_bytes([code[i], code[i + 1]]);
                     let val = self.num_consts[index as usize];
                     f.write_fmt(format_args!("    {} '{}'", index, val))?;
                     i += 2;
-                },
+                }
                 Instruction::LoadConstNumWW => {
-                    let index = u32::from_le_bytes([code[i], code[i+1], code[i+2], code[i+3]]);
+                    let index =
+                        u32::from_le_bytes([code[i], code[i + 1], code[i + 2], code[i + 3]]);
                     let val = self.num_consts[index as usize];
                     f.write_fmt(format_args!("    {} '{}'", index, val))?;
                     i += 4;
-                },
+                }
                 Instruction::GetLocal | Instruction::SetLocal => {
                     f.write_fmt(format_args!("    {}", code[i]))?;
                     i += 1;
                 }
                 Instruction::GetLocalW | Instruction::SetLocalW => {
-                    let index = u16::from_le_bytes([code[i], code[i+1]]);
+                    let index = u16::from_le_bytes([code[i], code[i + 1]]);
                     f.write_fmt(format_args!("    {}", index))?;
                     i += 12
                 }
 
                 _ => {}
-            } 
-
+            }
 
             f.write_char('\n')?;
         }

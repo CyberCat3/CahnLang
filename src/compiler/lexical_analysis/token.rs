@@ -1,5 +1,7 @@
 use std::fmt;
 
+use crate::compiler::string_handling::StringAtom;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum TokenType {
     Plus,
@@ -62,14 +64,14 @@ impl fmt::Display for TokenType {
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub struct Token<'a> {
+#[derive(Debug, Clone)]
+pub struct Token {
     pub index: usize,
     pub token_type: TokenType,
-    pub lexeme: &'a str,
+    pub lexeme: StringAtom,
 }
 
-impl<'a> fmt::Display for Token<'a> {
+impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!("{}(\"{}\")", self.token_type, self.lexeme))
     }

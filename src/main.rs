@@ -1,20 +1,26 @@
-use ahash::AHashMap;
-use string_interner::StringInterner;
-
-
 fn main() {
     use std::fs;
 
-    use cahn_lang::{compiler::{CodeGenerator, Parser}, runtime::VM};
+    use cahn_lang::{
+        compiler::{string_handling::StringInterner, CodeGenerator, Parser},
+        runtime::VM,
+    };
     let src = fs::read_to_string("./test.cahn").unwrap();
     println!("SOURCE CODE\n{}", src);
 
+    let interner = StringInterner::new();
     let arena = bumpalo::Bump::new();
-    
-    let ast = Parser::from_str(&src, &arena).parse_program().unwrap();
 
-    println!("\nAST ({} bytes allocated)\n{}", arena.allocated_bytes(), ast);
-    
+    let ast = Parser::from_str(&src, &arena, interner.clone())
+        .parse_program()
+        .unwrap();
+
+    println!(
+        "\nAST ({} bytes allocated)\n{}",
+        arena.allocated_bytes(),
+        ast
+    );
+
     let exec = CodeGenerator::new().gen(&ast).unwrap();
 
     println!("{}", exec);

@@ -1,5 +1,5 @@
 use cahn_lang::{
-    compiler::{CodeGenerator, Parser},
+    compiler::{string_handling::StringInterner, CodeGenerator, Parser},
     executable::Instruction,
 };
 
@@ -8,7 +8,8 @@ fn codegen() {
     let code = "print  2 +  2 * 3 + 0.3";
 
     let arena = bumpalo::Bump::new();
-    let parser = Parser::from_str(code, &arena);
+    let interner = StringInterner::new();
+    let parser = Parser::from_str(code, &arena, interner);
     let ast = parser.parse_program().unwrap();
     println!("ast: {}", ast);
     assert_eq!(ast.to_string(), "(program (print (+ (+ 2 (* 2 3)) 0.3)))");

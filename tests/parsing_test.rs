@@ -1,10 +1,11 @@
-use cahn_lang::compiler::syntactical_analysis::Parser;
+use cahn_lang::compiler::{string_handling::StringInterner, syntactical_analysis::Parser};
 
 #[test]
 fn basic_precedence() {
     let src = "2 + 2 * 3";
     let arena = bumpalo::Bump::new();
-    let parser = Parser::from_str(src, &arena);
+    let interner = StringInterner::new();
+    let parser = Parser::from_str(src, &arena, interner);
     let ast = parser.parse_program().unwrap();
     assert_eq!(&ast.to_string(), "(program (+ 2 (* 2 3)))");
 }
@@ -12,7 +13,7 @@ fn basic_precedence() {
 // pub fn parse_test() {
 //     use crate::compiler::syntactical_analysis::Parser;
 //     use bumpalo::Bump;
-    
+
 //     let source = "
 //         if 2 = 2 then
 //             print 5
@@ -34,6 +35,3 @@ fn basic_precedence() {
 
 //     println!("\nbytes allocated for ast: {}", arena.allocated_bytes());
 // }
-
-
- 
