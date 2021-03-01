@@ -1,0 +1,7 @@
+let x := 2
+
+block
+    let y := 5
+    print x + y + 1
+end
+

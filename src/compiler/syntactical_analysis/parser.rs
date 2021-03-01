@@ -93,101 +93,166 @@ impl<'a> Parser<'a> {
     //     })
     // }
 
-    pub fn parse_program(&self) -> Result<Expr<'a>> {
-        let exprs = self.parse_expression_list()?;
+    pub fn parse_program(&self) -> Result<ProgramStmt<'a>> {
+        let exprs = self.parse_statement_list()?;
         let eof = self.expect(TokenType::Eof, || "The program should end here".into())?;
-        Ok(ProgramExpr::new(self.arena, exprs, eof))
+        Ok(ProgramStmt::new(exprs, eof))
     }
 
-    fn parse_expression_list(&self) -> Result<Expr<'a>> {
-        let mut exprs = bumpalo::vec![in self.arena; self.parse_expression()?];
+    fn parse_statement_list(&self) -> Result<StmtList<'a>> {
+        let mut stmts = bumpalo::vec![in self.arena; self.parse_statement()?];
 
         while !self.check_ttype_any(token_groups::BLOCK_ENDINGS) {
-            exprs.push(self.parse_expression()?);
+            stmts.push(self.parse_statement()?);
         }
 
-        Ok(ExprList::new(self.arena, exprs))
+        Ok(StmtList::new(stmts))
     }
 
-    fn finish_block_expr(&self, block_token: Token) -> Result<Expr<'a>> {
-        let content = self.parse_expression_list()?;
+    fn finish_block_stmt(&self, block_token: Token) -> Result<BlockStmt<'a>> {
+        let content = self.parse_statement_list()?;
         let end_token = self.expect(TokenType::End, || {
             "expected 'end' to close explicit block".into()
         })?;
-        Ok(BlockExpr::new(self.arena, block_token, content, end_token))
+        Ok(BlockStmt::new(block_token, content, end_token))
     }
 
-    fn finish_var_decl_expresion(&self, var_token: Token) -> Result<Expr<'a>> {
+    fn finish_var_decl_statement(&self, var_token: Token) -> Result<VarDeclStmt<'a>> {
         let ident = self.expect(TokenType::Identifier, || {
             "expected identifier after variable declaration".into()
         })?;
 
+        let _assignment_operator = self.expect(TokenType::SemicolonEqual, || {
+            "expected := after variable name".into()
+        })?;
+
         let expr = self.parse_expression()?;
 
-        Ok(VarDeclExpr::new(self.arena, var_token, ident, expr))
+        Ok(VarDeclStmt::new(var_token, ident, expr))
     }
 
-    fn finish_if_expression(&self, if_token: Token) -> Result<Expr<'a>> {
+    fn finish_if_stmt(&self, if_token: Token) -> Result<IfStmt<'a>> {
         let condition = self.parse_expression()?;
-        let _then_token = self.expect(TokenType::Then, || {
+        let then_token = self.expect(TokenType::Then, || {
             "expected 'then' after if-condition".into()
         })?;
-        let then_clause = self.parse_expression_list()?;
 
-        if let Some(end_token) = self.check_advance(TokenType::End) {
-            return Ok(IfExpr::new(
-                self.arena,
-                if_token,
-                condition,
-                then_clause,
-                None,
-                end_token,
-            ));
-        };
+        let then_stmts = self.parse_statement_list()?;
 
-        if let Some(_else_token) = self.check_advance(TokenType::Else) {
-            let else_clause = self.parse_expression_list()?;
+        if let Some(else_token) = self.check_advance(TokenType::Else) {
+            let then_block = BlockStmt::new(if_token.clone(), then_stmts, else_token.clone());
+            let else_stmts = self.parse_statement_list()?;
+
             let end_token =
-                self.expect(TokenType::End, || "expected 'end' after else-clause".into())?;
-            return Ok(IfExpr::new(
-                self.arena,
+                self.expect(TokenType::End, || "expected end after else-clause".into())?;
+
+            let else_block = BlockStmt::new(else_token.clone(), else_stmts, end_token.clone());
+
+            Ok(IfStmt::new(
                 if_token,
                 condition,
-                then_clause,
-                Some(else_clause),
+                then_block,
+                Some(else_token),
+                Some(else_block),
                 end_token,
-            ));
-        };
+            ))
+        } else {
+            let end_token =
+                self.expect(TokenType::End, || "expected end after then-clause".into())?;
+            let then_block = BlockStmt::new(then_token, then_stmts, end_token.clone());
 
-        if let Some(else_if_token) = self.check_advance(TokenType::ElseIf) {
-            let else_if_expr = self.finish_if_expression(else_if_token.clone())?;
-            return Ok(IfExpr::new(
-                self.arena,
-                if_token,
-                condition,
-                then_clause,
-                Some(else_if_expr),
-                else_if_token,
-            ));
+            Ok(IfStmt::new(
+                if_token, condition, then_block, None, None, end_token,
+            ))
         }
+    }
 
-        Err(ParseError::BadToken {
-            token: self.advance_token(),
-            message: "expected either 'else-if', 'else' or 'end' after then-clause".into(),
+    fn parse_statement(&self) -> Result<Stmt<'a>> {
+        let token = self.advance_token();
+
+        Ok(match token.token_type {
+            TokenType::Let => self.finish_var_decl_statement(token)?.into_stmt(self.arena),
+
+            TokenType::Print => self.finish_print_statement(token)?.into_stmt(self.arena),
+
+            TokenType::Block => self.finish_block_stmt(token)?.into_stmt(self.arena),
+
+            TokenType::If => self.finish_if_stmt(token)?.into_stmt(self.arena),
+
+            _ => {
+                return Err(ParseError::UnexpectedToken {
+                    token,
+                    message: "expected statement".into(),
+                })
+            }
         })
     }
 
-    fn finish_print_expression(&self, print_token: Token) -> Result<Expr<'a>> {
+    // fn finish_if_expression(&self, if_token: Token) -> Result<IfExpr<'a>> {
+    //     let condition = self.parse_expression()?;
+    //     let then_token = self.expect(TokenType::Then, || {
+    //         "expected 'then' after if-condition".into()
+    //     })?;
+
+    //     let then_exprs = self.parse_expression_list()?;
+
+    //     if let Some(end_token) = self.check_advance(TokenType::End) {
+    //         return Ok(IfExpr::new(
+    //             if_token,
+    //             condition,
+    //             BlockExpr::new(then_token, then_exprs, end_token.clone()),
+    //             None,
+    //             end_token,
+    //         ));
+    //     };
+
+    //     if let Some(else_token) = self.check_advance(TokenType::Else) {
+    //         let else_exprs = self.parse_expression_list()?;
+
+    //         let end_token =
+    //             self.expect(TokenType::End, || "expected 'end' after else-clause".into())?;
+
+    //         return Ok(IfExpr::new(
+    //             if_token,
+    //             condition,
+    //             BlockExpr::new(then_token, then_exprs, else_token.clone()),
+    //             Some(BlockExpr::new(else_token, else_exprs, end_token.clone())),
+    //             end_token,
+    //         ));
+    //     };
+
+    //     if let Some(else_if_token) = self.check_advance(TokenType::ElseIf) {
+    //         let else_if_expr = self.finish_if_expression(else_if_token.clone())?;
+    //         return Ok(IfExpr::new(
+    //             if_token.clone(),
+    //             condition,
+    //             BlockExpr::new(else_if_token.clone(), then_exprs, else_if_expr.if_token),
+    //             Some(BlockExpr::new(
+    //                 if_token,
+    //                 ExprList::new(bumpalo::vec![in self.arena; self.parse_expression()?]),
+    //                 else_if_token.clone(),
+    //             )),
+    //             else_if_token,
+    //         ));
+    //     }
+
+    //     Err(ParseError::BadToken {
+    //         token: self.advance_token(),
+    //         message: "expected either 'else-if', 'else' or 'end' after then-clause".into(),
+    //     })
+    // }
+
+    fn finish_print_statement(&self, print_token: Token) -> Result<PrintStmt<'a>> {
         let expr = self.parse_expression()?;
-        Ok(PrintExpr::new(self.arena, print_token, expr))
+        Ok(PrintStmt::new(print_token, expr))
     }
 
-    fn finish_group_expression(&self, paren_open: Token) -> Result<Expr<'a>> {
+    fn finish_group_expression(&self, paren_open: Token) -> Result<GroupExpr<'a>> {
         let expr = self.parse_expression()?;
         let paren_close = self.expect(TokenType::ParenClose, || {
             String::from("expected a closing parenthesis")
         })?;
-        return Ok(GroupExpr::new(self.arena, paren_open, expr, paren_close));
+        return Ok(GroupExpr::new(paren_open, expr, paren_close));
     }
 
     fn parse_expression(&self) -> Result<Expr<'a>> {
@@ -206,12 +271,7 @@ impl<'a> Parser<'a> {
                 });
             }
 
-            return Ok(InfixExpr::new(
-                self.arena,
-                expr,
-                assignment_operator,
-                right_expr,
-            ));
+            return Ok(InfixExpr::new(expr, assignment_operator, right_expr).into_expr(self.arena));
         }
         Ok(expr)
     }
@@ -220,7 +280,7 @@ impl<'a> Parser<'a> {
         let mut expr = self.parse_or()?;
 
         while let Some(operator) = self.check_advance(TokenType::And) {
-            expr = InfixExpr::new(self.arena, expr, operator, self.parse_or()?);
+            expr = InfixExpr::new(expr, operator, self.parse_or()?).into_expr(self.arena);
         }
 
         Ok(expr)
@@ -230,7 +290,7 @@ impl<'a> Parser<'a> {
         let mut expr = self.parse_comparison()?;
 
         while let Some(operator) = self.check_advance(TokenType::Or) {
-            expr = InfixExpr::new(self.arena, expr, operator, self.parse_comparison()?);
+            expr = InfixExpr::new(expr, operator, self.parse_comparison()?).into_expr(self.arena);
         }
 
         Ok(expr)
@@ -250,7 +310,7 @@ impl<'a> Parser<'a> {
                 });
             }
 
-            return Ok(InfixExpr::new(self.arena, expr, operator, right_expr));
+            return Ok(InfixExpr::new(expr, operator, right_expr).into_expr(self.arena));
         }
         Ok(expr)
     }
@@ -259,7 +319,8 @@ impl<'a> Parser<'a> {
         let mut expr = self.parse_multiplication()?;
 
         while let Some(operator) = self.check_advance_any(&[TokenType::Plus, TokenType::Minus]) {
-            expr = InfixExpr::new(self.arena, expr, operator, self.parse_multiplication()?);
+            expr =
+                InfixExpr::new(expr, operator, self.parse_multiplication()?).into_expr(self.arena);
         }
 
         Ok(expr)
@@ -271,7 +332,7 @@ impl<'a> Parser<'a> {
         while let Some(operator) =
             self.check_advance_any(&[TokenType::Star, TokenType::Slash, TokenType::DoubleSlash])
         {
-            expr = InfixExpr::new(self.arena, expr, operator, self.parse_unary()?);
+            expr = InfixExpr::new(expr, operator, self.parse_unary()?).into_expr(self.arena);
         }
 
         Ok(expr)
@@ -279,7 +340,7 @@ impl<'a> Parser<'a> {
 
     fn parse_unary(&self) -> Result<Expr<'a>> {
         if let Some(operator) = self.check_advance_any(token_groups::PREFIX_OPERATORS) {
-            Ok(PrefixExpr::new(self.arena, operator, self.parse_unary()?))
+            Ok(PrefixExpr::new(operator, self.parse_unary()?).into_expr(self.arena))
         } else {
             self.parse_exponent()
         }
@@ -289,48 +350,37 @@ impl<'a> Parser<'a> {
         let expr = self.parse_atom()?;
 
         if let Some(operator) = self.check_advance(TokenType::DoubleStar) {
-            Ok(InfixExpr::new(
-                self.arena,
-                expr,
-                operator,
-                self.parse_unary()?,
-            ))
+            Ok(InfixExpr::new(expr, operator, self.parse_unary()?).into_expr(self.arena))
         } else {
             Ok(expr)
         }
     }
 
     fn parse_atom(&self) -> Result<Expr<'a>> {
-        if let Some(token) = self.check_advance_any(token_groups::LITERALS) {
-            return Ok(match token.token_type {
-                TokenType::Number => NumberExpr::new(
-                    self.arena,
-                    token.clone(),
-                    token.lexeme.run_on_str(|str| str.parse()).unwrap(),
-                ),
-                TokenType::True => BoolExpr::new(self.arena, token, true),
-                TokenType::False => BoolExpr::new(self.arena, token, false),
-                _ => unreachable!(),
-            });
-        }
+        let token = self.advance_token();
 
-        match self.peek_token().token_type {
-            TokenType::Identifier => Ok(VarExpr::new(self.arena, self.advance_token())),
+        Ok(match token.token_type {
+            TokenType::Number => NumberExpr::new(
+                token.clone(),
+                token
+                    .lexeme
+                    .run_on_str(|str| str.parse())
+                    .expect("Lexer shouldn't tokenize invalid numbers"),
+            )
+            .into_expr(self.arena),
 
-            TokenType::ParenOpen => self.finish_group_expression(self.advance_token()),
+            TokenType::True => BoolExpr::new(token, true).into_expr(self.arena),
+            TokenType::False => BoolExpr::new(token, false).into_expr(self.arena),
+            TokenType::Identifier => VarExpr::new(token).into_expr(self.arena),
 
-            TokenType::Let => self.finish_var_decl_expresion(self.advance_token()),
+            TokenType::ParenOpen => self.finish_group_expression(token)?.into_expr(self.arena),
 
-            TokenType::If => self.finish_if_expression(self.advance_token()),
-
-            TokenType::Print => self.finish_print_expression(self.advance_token()),
-
-            TokenType::Block => self.finish_block_expr(self.advance_token()),
-
-            _ => Err(ParseError::BadToken {
-                token: self.peek_token(),
-                message: "expected some expression here".into(),
-            }),
-        }
+            _ => {
+                return Err(ParseError::BadToken {
+                    message: "expected either a literal, a variable or (".into(),
+                    token,
+                })
+            }
+        })
     }
 }

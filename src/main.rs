@@ -1,33 +1,137 @@
+use std::{env, fs, process::exit};
+
+use cahn_lang::{
+    compiler::{
+        lexical_analysis::{Lexer, TokenType},
+        string_handling::StringInterner,
+        CodeGenerator, Parser,
+    },
+    runtime::VM,
+};
+
+fn print_help() {
+    eprintln!(
+        "Cahn lang
+
+USAGE:
+    cahn [FLAGS] <INPUT FILE>
+
+EXAMPLE:
+    cahn ./hello_world.cahn
+
+FLAGS:
+    -s   --print-source        Prints Cahn source code to console
+    -l   --print-tokens        Prints Lexer output
+    -p   --print-ast           Prints the AST, the parser's output
+    -c   --print-bytecode      Prints the compiled byte code
+"
+    );
+}
+
+#[derive(Debug, Default)]
+struct Config {
+    print_source: bool,
+    print_tokens: bool,
+    print_ast: bool,
+    print_bytecode: bool,
+    cahn_file: String,
+}
+
+fn get_config() -> Config {
+    let mut args = env::args().peekable();
+
+    let _exec_name = args.next().unwrap();
+
+    if args.peek().is_none() {
+        print_help();
+        exit(1);
+    }
+
+    let mut config = Config::default();
+
+    while let Some(arg) = args.next() {
+        match &arg[..] {
+            "-s" | "--print-source" => config.print_source = true,
+            "-l" | "--print-tokens" => config.print_tokens = true,
+            "-p" | "--print-ast" => config.print_ast = true,
+            "-c" | "--print-bytecode" => config.print_bytecode = true,
+            _ => config.cahn_file = arg,
+        }
+    }
+    config
+}
+
 fn main() {
-    use std::fs;
+    let config = get_config();
 
-    use cahn_lang::{
-        compiler::{string_handling::StringInterner, CodeGenerator, Parser},
-        runtime::VM,
+    // READ SOURCE CODE
+    let source_code = match fs::read_to_string(&config.cahn_file) {
+        Ok(content) => content,
+
+        Err(err) => {
+            eprintln!(
+                "Couldn't read '{}' due to error: {}.",
+                config.cahn_file, err
+            );
+            exit(1);
+        }
     };
-    let src = fs::read_to_string("./test.cahn").unwrap();
-    println!("SOURCE CODE\n{}", src);
 
+    // PRINT SOURCE
+    if config.print_source {
+        eprintln!("<SOURCE CODE>\n{}\n</SOURCE CODE>\n", source_code);
+    }
+
+    // CREATE INTERNER AND ARENA
     let interner = StringInterner::new();
     let arena = bumpalo::Bump::new();
 
-    let ast = Parser::from_str(&src, &arena, interner.clone())
-        .parse_program()
-        .unwrap();
+    // PRINT LEXER OUTPUT
+    if config.print_tokens {
+        eprintln!("<TOKENS>");
+        let lexer = Lexer::new(&source_code, interner.clone());
 
-    println!(
-        "\nAST ({} bytes allocated)\n{}",
-        arena.allocated_bytes(),
-        ast
-    );
+        loop {
+            let token = lexer.lex_token();
+            println!("{}", token);
+            if token.token_type == TokenType::Eof {
+                break;
+            }
+        }
+        println!("</TOKENS>");
+    }
 
-    let exec = CodeGenerator::new().gen(&ast).unwrap();
+    // PARSE PROGRAM
+    let ast = match Parser::from_str(&source_code, &arena, interner.clone()).parse_program() {
+        Ok(ast) => ast,
+        Err(err) => {
+            eprintln!("An error occurred during parsing: {}.", err);
+            exit(2);
+        }
+    };
 
-    println!("{}", exec);
-    println!("raw code: {:?}", exec.code);
+    // PRINT PARSER OUTPUT
+    if config.print_ast {
+        eprintln!("<AST>\n{}\n</AST>\n", ast);
+    }
 
-    println!("\n<VM STDOUT>");
-    let results = VM::new(&exec).run().unwrap();
-    println!("</VM STDOUT>");
-    println!("results: {:?}", results);
+    // COMPILE PROGRAM
+    let executable = match CodeGenerator::new(interner, config.cahn_file).gen(&ast) {
+        Ok(exec) => exec,
+        Err(err) => {
+            eprintln!("An error occurred during compilation: {}.", err);
+            exit(3);
+        }
+    };
+
+    // PRINT BYTECODE
+    if config.print_bytecode {
+        eprintln!("<BYTECODE>\n{}\n</BYTECODE>\n", executable);
+    }
+
+    // RUN PROGRAM
+    if let Err(err) = VM::run_to_stdout(&executable) {
+        eprintln!("A runtime error occurred: {}", err);
+        exit(4);
+    }
 }

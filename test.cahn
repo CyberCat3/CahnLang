@@ -1,19 +1,19 @@
-#/if 2 = 2 then
-    print 5
-elseif 2 = 3 then
-    print 8
+if true then
+    print 1000
+    if false then
+        print 2000
+    else
+        print 3000
+    end
+    print 4000
 else
-    print 7
-end /#
-
-
-let x block
-    let y 2
-    let z 3
-    z + y
+    print 5000
+    if true then
+        print 6000
+    else
+        print 7000
+    end
+    print 8000
 end
 
-print x
-print 2 + 2
-
-#print x
+print 9000

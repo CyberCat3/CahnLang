@@ -6,24 +6,51 @@ use crate::{
     },
 };
 
-use std::mem;
+use std::{
+    fmt::{self, Debug},
+    io::{self, Write},
+    mem,
+};
 
-#[derive(Debug, Clone)]
 pub struct VM<'a> {
     stack: Vec<Value>,
     ip: usize,
     fp: usize,
     exec: &'a Executable,
+    stdout: &'a mut dyn Write,
+}
+
+impl<'a> Debug for VM<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!(
+            "VM(ip: {}, fp: {}, stack: {:?})",
+            self.ip, self.fp, self.stack
+        ))
+    }
 }
 
 impl<'a> VM<'a> {
-    pub fn new(exec: &'a Executable) -> Self {
+    pub fn new(exec: &'a Executable, stdout: &'a mut dyn Write) -> Self {
         VM {
+            stdout,
             stack: Vec::new(),
             ip: 0,
             fp: 0,
             exec,
         }
+    }
+
+    pub fn run_to_stdout(exec: &'a Executable) -> Result<()> {
+        let mut stdout = io::stdout();
+        let vm = VM::new(exec, &mut stdout);
+        vm.run()
+    }
+
+    pub fn run_to_string(exec: &'a Executable) -> Result<String> {
+        let mut bytes: Vec<u8> = vec![];
+        let vm = VM::new(exec, &mut bytes);
+        vm.run()?;
+        Ok(String::from_utf8(bytes).expect("VM shouldn't be able to produce invalid utf8"))
     }
 
     #[inline]
@@ -303,25 +330,51 @@ impl<'a> VM<'a> {
             }
 
             Instruction::Print => {
-                println!("{}", self.pop());
+                let val = self.pop();
+                write!(self.stdout, "{}\n", val)?;
+            }
+
+            Instruction::Jump => {
+                let jump_location = self.read_u32() as usize;
+                self.ip = jump_location;
+            }
+
+            Instruction::JumpIfFalse => {
+                let jump_location = self.read_u32() as usize;
+                if !self.pop().is_truthy() {
+                    self.ip = jump_location;
+                }
             }
         };
 
         Ok(())
     }
 
-    pub fn run(mut self) -> Result<Vec<Value>> {
+    pub fn run(mut self) -> Result<()> {
         while self.ip < self.exec.code.len() {
             let instruction = self.read_instruction();
             // println!("about to run: {:?}", instruction);
 
             // let mut string = String::new();
-            // stdin().read_line(&mut string).unwrap();
+            // std::io::stdin().read_line(&mut string).unwrap();
 
             self.exec_instruction(instruction)?;
 
+            // let mut padding = String::new();
+            // let ins_str = format!("{:?}", instruction);
+
+            // for _ in 0..(15 - ins_str.len()) {
+            //     padding.push('-');
+            // }
+
+            // print!("{:?}{}-->   ", instruction, padding);
+            // for val in &self.stack {
+            //     print!("{}   ", val);
+            // }
+            // println!();
+
             // println!("stack is now: {:?}", self.stack);
         }
-        Ok(self.stack)
+        Ok(())
     }
 }

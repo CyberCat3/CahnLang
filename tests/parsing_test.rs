@@ -2,12 +2,12 @@ use cahn_lang::compiler::{string_handling::StringInterner, syntactical_analysis:
 
 #[test]
 fn basic_precedence() {
-    let src = "2 + 2 * 3";
+    let src = "print 2 + 2 * 3";
     let arena = bumpalo::Bump::new();
     let interner = StringInterner::new();
     let parser = Parser::from_str(src, &arena, interner);
     let ast = parser.parse_program().unwrap();
-    assert_eq!(&ast.to_string(), "(program (+ 2 (* 2 3)))");
+    assert_eq!(&ast.to_string(), "(program (print (+ 2 (* 2 3)))\n)");
 }
 
 // pub fn parse_test() {

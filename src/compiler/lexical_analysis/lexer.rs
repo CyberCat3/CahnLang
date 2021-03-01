@@ -1,6 +1,6 @@
 use crate::compiler::string_handling::{StringAtom, StringInterner};
 
-use super::{Token, TokenType};
+use super::{token::TokenPos, Token, TokenType};
 use std::cell::Cell;
 
 #[derive(Debug)]
@@ -8,6 +8,10 @@ pub struct Lexer<'a> {
     source_string: &'a str,
     start_index: Cell<usize>,
     current_index: Cell<usize>,
+
+    start_pos: Cell<TokenPos>,
+    current_pos: Cell<TokenPos>,
+
     interner: StringInterner,
     keyword_atoms: KeywordAtoms,
 }
@@ -57,6 +61,10 @@ impl<'a> Lexer<'a> {
             source_string,
             start_index: Cell::new(0),
             current_index: Cell::new(0),
+
+            start_pos: Cell::new(TokenPos::new(1, 1)),
+            current_pos: Cell::new(TokenPos::new(1, 1)),
+
             keyword_atoms: KeywordAtoms::with_interner(&interner),
             interner,
         }
@@ -73,6 +81,16 @@ impl<'a> Lexer<'a> {
         if let Some(c) = c {
             self.current_index
                 .set(self.current_index.get() + c.len_utf8());
+
+            if c == '\n' {
+                self.current_pos
+                    .set(TokenPos::new(self.current_pos.get().line + 1, 1));
+            } else {
+                self.current_pos.set(TokenPos::new(
+                    self.current_pos.get().line,
+                    self.current_pos.get().column + 1,
+                ));
+            }
         }
         c
     }
@@ -125,7 +143,7 @@ impl<'a> Lexer<'a> {
 
     fn make_token(&self, token_type: TokenType) -> Token {
         Token {
-            index: self.start_index.get(),
+            pos: self.start_pos.get(),
             token_type,
             lexeme: self
                 .interner
@@ -188,6 +206,7 @@ impl<'a> Lexer<'a> {
     pub fn lex_token(&self) -> Token {
         self.skip_whitespace();
         self.start_index.set(self.current_index.get());
+        self.start_pos.set(self.current_pos.get());
 
         let c = match self.advance() {
             None => return self.make_token(TokenType::Eof),

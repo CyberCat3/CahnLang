@@ -64,15 +64,42 @@ impl fmt::Display for TokenType {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct TokenPos {
+    pub line: usize,
+    pub column: usize,
+}
+
+impl TokenPos {
+    pub fn new(line: usize, column: usize) -> Self {
+        TokenPos { line, column }
+    }
+}
+
+impl fmt::Display for TokenPos {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("{}:{}", self.line, self.column))
+    }
+}
+
+impl Default for TokenPos {
+    fn default() -> Self {
+        Self::new(1, 1)
+    }
+}
+
 #[derive(Debug, Clone)]
 pub struct Token {
-    pub index: usize,
+    pub pos: TokenPos,
     pub token_type: TokenType,
     pub lexeme: StringAtom,
 }
 
 impl fmt::Display for Token {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_fmt(format_args!("{}(\"{}\")", self.token_type, self.lexeme))
+        f.write_fmt(format_args!(
+            "[{}]{}(\"{}\")",
+            self.pos, self.token_type, self.lexeme
+        ))
     }
 }

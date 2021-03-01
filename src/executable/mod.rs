@@ -1,4 +1,4 @@
-pub mod instructions;
+mod instructions;
 
 pub use instructions::Instruction;
 
@@ -7,15 +7,29 @@ use std::{
     mem,
 };
 
+use crate::compiler::lexical_analysis::TokenPos;
+
 #[derive(Debug, Clone)]
 pub struct Executable {
     pub num_consts: Vec<f64>,
     pub code: Vec<u8>,
+    pub code_map: Vec<TokenPos>,
+    pub source_file: String,
 }
 
 impl Executable {
-    pub fn new(num_consts: Vec<f64>, code: Vec<u8>) -> Self {
-        Executable { num_consts, code }
+    pub fn new(
+        source_file: String,
+        num_consts: Vec<f64>,
+        code: Vec<u8>,
+        code_map: Vec<TokenPos>,
+    ) -> Self {
+        Executable {
+            source_file,
+            num_consts,
+            code,
+            code_map,
+        }
     }
 }
 
@@ -30,13 +44,21 @@ INSTRUCTIONS:\n",
         ))?;
 
         let code = &self.code;
+        let code_map = &self.code_map;
         let mut i = 0;
 
         while i < code.len() {
             let instruction: Instruction = unsafe { mem::transmute(code[i]) };
+            let code_pos = code_map[i];
             i += 1;
 
-            f.write_fmt(format_args!("    {:?}", instruction))?;
+            f.write_fmt(format_args!(
+                "{}:{} \t{}\t{:?}",
+                self.source_file,
+                code_pos,
+                i - 1,
+                instruction
+            ))?;
 
             match instruction {
                 Instruction::LoadLitNum => {
@@ -62,6 +84,14 @@ INSTRUCTIONS:\n",
                     f.write_fmt(format_args!("    {} '{}'", index, val))?;
                     i += 4;
                 }
+                Instruction::JumpIfFalse | Instruction::Jump => {
+                    let jump_location =
+                        u32::from_le_bytes([code[i], code[i + 1], code[i + 2], code[i + 3]]);
+
+                    f.write_fmt(format_args!("    {}", jump_location))?;
+                    i += 4;
+                }
+
                 Instruction::GetLocal | Instruction::SetLocal => {
                     f.write_fmt(format_args!("    {}", code[i]))?;
                     i += 1;
@@ -69,10 +99,26 @@ INSTRUCTIONS:\n",
                 Instruction::GetLocalW | Instruction::SetLocalW => {
                     let index = u16::from_le_bytes([code[i], code[i + 1]]);
                     f.write_fmt(format_args!("    {}", index))?;
-                    i += 12
+                    i += 2
                 }
 
-                _ => {}
+                Instruction::Add => {}
+                Instruction::Mul => {}
+                Instruction::Sub => {}
+                Instruction::Div => {}
+                Instruction::Negate => {}
+                Instruction::Not => {}
+                Instruction::LoadTrue => {}
+                Instruction::LoadFalse => {}
+                Instruction::LoadNil => {}
+                Instruction::LessThan => {}
+                Instruction::GreaterThan => {}
+                Instruction::LessThanOrEqual => {}
+                Instruction::GreaterThanOrEqual => {}
+                Instruction::Equal => {}
+                Instruction::Dup => {}
+                Instruction::Pop => {}
+                Instruction::Print => {}
             }
 
             f.write_char('\n')?;

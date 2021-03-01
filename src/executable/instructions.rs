@@ -34,4 +34,7 @@ pub enum Instruction {
     Pop,
 
     Print,
+
+    Jump,
+    JumpIfFalse,
 }
