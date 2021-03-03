@@ -79,7 +79,7 @@ fn main() {
 
     // PRINT SOURCE
     if config.print_source {
-        eprintln!("<SOURCE CODE>\n{}\n</SOURCE CODE>\n", source_code);
+        println!("<SOURCE CODE>\n{}\n</SOURCE CODE>\n", source_code);
     }
 
     // CREATE INTERNER AND ARENA
@@ -88,7 +88,7 @@ fn main() {
 
     // PRINT LEXER OUTPUT
     if config.print_tokens {
-        eprintln!("<TOKENS>");
+        println!("<TOKENS>");
         let lexer = Lexer::new(&source_code, interner.clone());
 
         loop {
@@ -112,7 +112,7 @@ fn main() {
 
     // PRINT PARSER OUTPUT
     if config.print_ast {
-        eprintln!("<AST>\n{}\n</AST>\n", ast);
+        println!("<AST>\n{}\n</AST>\n", ast);
     }
 
     // COMPILE PROGRAM
@@ -126,7 +126,7 @@ fn main() {
 
     // PRINT BYTECODE
     if config.print_bytecode {
-        eprintln!("<BYTECODE>\n{}\n</BYTECODE>\n", executable);
+        println!("<BYTECODE>\n{}\n</BYTECODE>\n", executable);
     }
 
     // RUN PROGRAM

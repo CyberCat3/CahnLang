@@ -19,6 +19,9 @@ pub enum Instruction {
     GetLocalW,
 
     LoadLitNum,
+    LoadStringLiteral,
+
+    Concat,
 
     LoadTrue,
     LoadFalse,

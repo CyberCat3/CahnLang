@@ -9,6 +9,15 @@ const exprs = [
         }
     },
     {
+        name: "StringExpr",
+        ename: "String",
+        format: "{}", fargs: "self.token.lexeme",
+        fields: {
+            token: "Token",
+            string: "StringAtom"
+        }
+    },
+    {
         name: "VarExpr",
         ename: "Var",
         format: "{}", fargs: "self.identifier.lexeme",
@@ -183,7 +192,7 @@ function createExprs(exprs) {
     const fileString = `
         use std::fmt::{self, Debug};
 
-        use crate::compiler::lexical_analysis::Token;
+        use crate::compiler::{lexical_analysis::Token, string_handling::StringAtom};
 
         #[derive(Debug, Clone)]
         pub enum Expr<'a> {

@@ -40,8 +40,11 @@ pub struct CodeGenerator {
     num_consts: Vec<f64>,
     num_consts_map: AHashMap<StringAtom, usize>,
     code: Vec<u8>,
-    code_map: Vec<TokenPos>,
 
+    string_data: String,
+    string_data_map: AHashMap<StringAtom, (u32, u32)>,
+
+    code_map: Vec<TokenPos>,
     current_source_position: TokenPos,
 
     interner: StringInterner,
@@ -62,6 +65,9 @@ impl CodeGenerator {
 
             current_source_position: TokenPos::new(1, 1),
             code_map: vec![],
+
+            string_data: String::new(),
+            string_data_map: AHashMap::new(),
 
             locals: vec![],
             scope_level: 0,
@@ -145,50 +151,22 @@ impl CodeGenerator {
         self.emit_byte(num);
     }
 
-    fn emit_load_num_instruction(&mut self, index: usize) {
-        if index < u8::MAX as usize {
-            self.emit_instruction(Instruction::LoadConstNum);
-            self.emit_byte(index as u8);
-            return;
-        }
-
-        if index < u16::MAX as usize {
-            self.emit_instruction(Instruction::LoadConstNumW);
-            self.emit_bytes(&(index as u16).to_le_bytes());
-            return;
-        }
-
-        if index < u32::MAX as usize {
-            self.emit_instruction(Instruction::LoadConstNumWW);
-            self.emit_bytes(&(index as u32).to_le_bytes());
-            return;
-        }
-
-        panic!(
-            "So many number constants! Cahn only supports up to {}, but got {}",
-            u32::MAX,
-            index
-        );
-    }
-
     fn emit_get_local_instruction(&mut self, index: usize) {
-        if index < u8::MAX as usize {
+        if index <= u8::MAX as usize {
             self.emit_instruction(Instruction::GetLocal);
             self.emit_byte(index as u8);
             return;
         }
 
-        if index < u16::MAX as usize {
-            self.emit_instruction(Instruction::GetLocalW);
-            self.emit_bytes(&(index as u16).to_le_bytes());
-            return;
-        }
-
-        panic!(
-            "So many locals! Cahn only supports up to {}, but got {}",
+        assert!(
+            index <= u16::MAX as usize,
+            "Too many locals! Cahn only supports up to {}, but got {}",
             u16::MAX,
             index
         );
+
+        self.emit_instruction(Instruction::GetLocalW);
+        self.emit_bytes(&(index as u16).to_le_bytes());
     }
 
     fn emit_set_local_instruction(&mut self, index: usize) {
@@ -198,17 +176,15 @@ impl CodeGenerator {
             return;
         }
 
-        if index < u16::MAX as usize {
-            self.emit_instruction(Instruction::SetLocalW);
-            self.emit_bytes(&(index as u16).to_le_bytes());
-            return;
-        }
-
-        panic!(
-            "So many locals! Cahn only supports up to {}, but got {}",
+        assert!(
+            index <= u16::MAX as usize,
+            "Too many locals! Cahn only supports up to {}, but got {}",
             u16::MAX,
             index
         );
+
+        self.emit_instruction(Instruction::SetLocalW);
+        self.emit_bytes(&(index as u16).to_le_bytes());
     }
 
     fn emit_load_number_instruction(&mut self, number: f64, lexeme: StringAtom) {
@@ -216,7 +192,7 @@ impl CodeGenerator {
             let number = number as u8;
             self.emit_load_num_lit_instruction(number);
         } else {
-            let num_index = match self.num_consts_map.entry(lexeme) {
+            let index = match self.num_consts_map.entry(lexeme) {
                 Entry::Occupied(entry) => *entry.get(),
 
                 Entry::Vacant(entry) => {
@@ -225,8 +201,52 @@ impl CodeGenerator {
                     *entry.insert(inserted_index)
                 }
             };
-            self.emit_load_num_instruction(num_index);
+
+            if index <= u8::MAX as usize {
+                self.emit_instruction(Instruction::LoadConstNum);
+                self.emit_byte(index as u8);
+                return;
+            }
+
+            if index <= u16::MAX as usize {
+                self.emit_instruction(Instruction::LoadConstNumW);
+                self.emit_bytes(&(index as u16).to_le_bytes());
+                return;
+            }
+
+            assert!(
+                index <= u32::MAX as usize,
+                "too many number constants! Cahn only supports op to {}, but got {}",
+                u32::MAX,
+                index
+            );
+
+            self.emit_instruction(Instruction::LoadConstNumWW);
+            self.emit_bytes(&(index as u32).to_le_bytes());
         }
+    }
+
+    fn emit_load_string_literal_instruction(&mut self, string: &StringAtom) {
+        let (start_index, end_index) = match self.string_data_map.entry(string.clone()) {
+            Entry::Occupied(entry) => entry.get().clone(),
+
+            Entry::Vacant(entry) => {
+                let start_index = self.string_data.len() as u32;
+
+                let string_data = &mut self.string_data;
+                string.run_on_str(|str| string_data.push_str(str));
+
+                let end_index = self.string_data.len() as u32;
+
+                let slice = (start_index, end_index);
+                entry.insert(slice);
+                slice
+            }
+        };
+
+        self.emit_instruction(Instruction::LoadStringLiteral);
+        self.emit_bytes(&start_index.to_le_bytes());
+        self.emit_bytes(&end_index.to_le_bytes());
     }
 
     fn emit_jump_instruction(&mut self, jump_instruction: Instruction) -> usize {
@@ -237,13 +257,12 @@ impl CodeGenerator {
     }
 
     fn patch_jump_instruction(&mut self, adress: usize, jump_location: usize) {
-        if jump_location > u32::MAX as usize {
-            panic!(
-                "to big jump adress, cahn supports only up to: {}, but got {}",
-                u32::MAX,
-                jump_location
-            );
-        }
+        assert!(
+            jump_location <= u32::MAX as usize,
+            "jump adress ({}) is over {}",
+            jump_location,
+            u32::MAX,
+        );
 
         let bytes = jump_location.to_le_bytes();
         self.code[adress] = bytes[0];
@@ -268,6 +287,11 @@ impl CodeGenerator {
             Expr::Number(ne) => {
                 self.set_source_pos(ne.token.pos);
                 self.emit_load_number_instruction(ne.number, ne.token.lexeme.clone())
+            }
+
+            Expr::String(se) => {
+                self.set_source_pos(se.token.pos);
+                self.emit_load_string_literal_instruction(&se.string);
             }
 
             Expr::Prefix(pe) => {
@@ -297,8 +321,9 @@ impl CodeGenerator {
                     TokenType::LessEqual => Instruction::LessThanOrEqual,
                     TokenType::Greater => Instruction::GreaterThan,
                     TokenType::GreaterEqual => Instruction::GreaterThanOrEqual,
+                    TokenType::DoubleDot => Instruction::Concat,
 
-                    other => panic!("this token type should not be a prefix expr: {:?}", other),
+                    other => panic!("this token type should not be a infix expr: {:?}", other),
                 });
             }
 
@@ -385,6 +410,7 @@ impl CodeGenerator {
         self.visit_program_stmt(program)?;
 
         Ok(Executable {
+            string_data: self.string_data,
             source_file: self.source_file_name,
             code: self.code,
             code_map: self.code_map,

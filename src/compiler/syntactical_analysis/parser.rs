@@ -297,10 +297,10 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_comparison(&self) -> Result<Expr<'a>> {
-        let expr = self.parse_addition()?;
+        let expr = self.parse_concatenation()?;
 
         if let Some(operator) = self.check_advance_any(token_groups::COMPARISON_OPERATORS) {
-            let right_expr = self.parse_addition()?;
+            let right_expr = self.parse_concatenation()?;
 
             if let Some(chained_operator) =
                 self.check_advance_any(token_groups::COMPARISON_OPERATORS)
@@ -312,6 +312,16 @@ impl<'a> Parser<'a> {
 
             return Ok(InfixExpr::new(expr, operator, right_expr).into_expr(self.arena));
         }
+        Ok(expr)
+    }
+
+    fn parse_concatenation(&self) -> Result<Expr<'a>> {
+        let mut expr = self.parse_addition()?;
+
+        while let Some(operator) = self.check_advance(TokenType::DoubleDot) {
+            expr = InfixExpr::new(expr, operator, self.parse_addition()?).into_expr(self.arena);
+        }
+
         Ok(expr)
     }
 
@@ -368,6 +378,11 @@ impl<'a> Parser<'a> {
                     .expect("Lexer shouldn't tokenize invalid numbers"),
             )
             .into_expr(self.arena),
+
+            TokenType::String => {
+                // cut is for removing ""
+                StringExpr::new(token.clone(), token.lexeme.cut(1, 1)).into_expr(self.arena)
+            }
 
             TokenType::True => BoolExpr::new(token, true).into_expr(self.arena),
             TokenType::False => BoolExpr::new(token, false).into_expr(self.arena),

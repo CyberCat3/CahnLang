@@ -15,16 +15,20 @@ pub struct Executable {
     pub code: Vec<u8>,
     pub code_map: Vec<TokenPos>,
     pub source_file: String,
+    pub string_data: String,
 }
 
 impl Executable {
     pub fn new(
-        source_file: String,
         num_consts: Vec<f64>,
+        string_data: String,
+
+        source_file: String,
         code: Vec<u8>,
         code_map: Vec<TokenPos>,
     ) -> Self {
         Executable {
+            string_data,
             source_file,
             num_consts,
             code,
@@ -38,9 +42,11 @@ impl fmt::Display for Executable {
         f.write_fmt(format_args!(
             "\n<Executable>
 NUM_CONSTS: {:?}
+
+STRING_DATA: '{}'
     
 INSTRUCTIONS:\n",
-            self.num_consts
+            self.num_consts, self.string_data,
         ))?;
 
         let code = &self.code;
@@ -102,6 +108,25 @@ INSTRUCTIONS:\n",
                     i += 2
                 }
 
+                Instruction::LoadStringLiteral => {
+                    let start_index =
+                        u32::from_le_bytes([code[i], code[i + 1], code[i + 2], code[i + 3]])
+                            as usize;
+
+                    let end_index =
+                        u32::from_le_bytes([code[i + 4], code[i + 5], code[i + 6], code[i + 7]])
+                            as usize;
+
+                    i += 8;
+
+                    f.write_fmt(format_args!(
+                        "    {}..{} '{}'",
+                        start_index,
+                        end_index,
+                        &self.string_data[start_index..end_index]
+                    ))?;
+                }
+
                 Instruction::Add => {}
                 Instruction::Mul => {}
                 Instruction::Sub => {}
@@ -119,6 +144,7 @@ INSTRUCTIONS:\n",
                 Instruction::Dup => {}
                 Instruction::Pop => {}
                 Instruction::Print => {}
+                Instruction::Concat => {}
             }
 
             f.write_char('\n')?;

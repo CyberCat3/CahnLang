@@ -1,4 +1,5 @@
 pub mod error;
+mod mem_manager;
 pub mod value;
 pub mod vm;
 

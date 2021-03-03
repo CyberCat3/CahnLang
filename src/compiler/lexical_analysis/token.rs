@@ -8,11 +8,13 @@ pub enum TokenType {
     Minus,
     Star,
     Slash,
+    DoubleDot,
     DoubleStar,
     DoubleSlash,
 
     Identifier,
     Number,
+    String,
     True,
     False,
     Nil,

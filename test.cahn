@@ -1,19 +1,6 @@
-if true then
-    print 1000
-    if false then
-        print 2000
-    else
-        print 3000
-    end
-    print 4000
-else
-    print 5000
-    if true then
-        print 6000
-    else
-        print 7000
-    end
-    print 8000
+block
+    let a := "hej " .. "andreas"
+    let b := "dav " .. "kurt"
+    print a .. b
 end
-
-print 9000
+print "2 + 2 = " .. 2 + 2

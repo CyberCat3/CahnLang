@@ -76,6 +76,13 @@ impl<'a> Lexer<'a> {
         c
     }
 
+    fn peek_next(&self) -> Option<char> {
+        let x = &self.source_string[self.current_index.get()..];
+        let mut c = x.chars();
+        c.next();
+        c.next()
+    }
+
     fn advance(&self) -> Option<char> {
         let c = self.peek_char();
         if let Some(c) = c {
@@ -168,11 +175,26 @@ impl<'a> Lexer<'a> {
         while matches!(self.peek_char(), Some(c) if c.is_ascii_digit()) {
             self.advance();
         }
-        self.mmatch('.');
-        while matches!(self.peek_char(), Some(c) if c.is_ascii_digit()) {
+
+        match (self.peek_char(), self.peek_next()) {
+            (Some(c), Some(n)) if c == '.' && n.is_ascii_digit() => {
+                self.advance();
+                self.advance();
+                while matches!(self.peek_char(), Some(c) if c.is_ascii_digit()) {
+                    self.advance();
+                }
+            }
+            _ => {}
+        };
+
+        self.make_token(TokenType::Number)
+    }
+
+    fn finish_string(&self) -> Token {
+        while !self.mmatch('"') {
             self.advance();
         }
-        self.make_token(TokenType::Number)
+        self.make_token(TokenType::String)
     }
 
     fn finish_identifier(&self) -> Token {
@@ -221,6 +243,10 @@ impl<'a> Lexer<'a> {
             '-' => self.make_token(TokenType::Minus),
 
             '=' => self.make_token(TokenType::Equal),
+
+            '"' => self.finish_string(),
+
+            '.' if self.mmatch('.') => self.make_token(TokenType::DoubleDot),
 
             '*' => self.make_token(if self.mmatch('*') {
                 TokenType::DoubleStar
