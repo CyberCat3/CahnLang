@@ -14,3 +14,7 @@ intmap = "*"
 
 [profile.release]
 lto = "on"
+
+[features]
+default = ["string_interning"]
+string_interning = []

@@ -62,6 +62,52 @@ const exprs = [
             operator: "Token",
             right: "Expr<'a>",
         }
+    },
+    {
+        name: "ListExpr",
+        ename: "List",
+        format_custom: `{
+            f.write_str("(list ")?;
+            for elem in &self.elements {
+                fmt::Display::fmt(elem, f)?;
+                f.write_str(", ")?;      
+            };
+            f.write_str(")")?;
+        }; Ok(())\n`,
+        fields: {
+            bracket_open: "Token",
+            elements: "Vec<'a, Expr<'a>>",
+            bracket_close: "Token",
+        }
+    },
+    {
+        name: "SubscriptExpr",
+        ename: "Subscript",
+        format: "([] {} {})", fargs: "self.subscriptee, self.index",
+        fields: {
+            subscriptee: "Expr<'a>",
+            bracket_open: "Token",
+            index: "Expr<'a>",
+            bracket_close: "Token",
+        }
+    },
+    {
+        name: "CallExpr",
+        ename: "Call",
+        format_custom: `{
+            f.write_fmt(format_args!("(call {} ", self.callee))?;
+            for arg in &self.args {
+                fmt::Display::fmt(arg, f)?;
+                f.write_str(", ")?;      
+            };
+            f.write_str(")")?;
+        }; Ok(())\n`,
+        fields: {
+            callee: "Expr<'a>",
+            paren_open: "Token",
+            args: "Vec<'a, Expr<'a>>",
+            paren_close: "Token"
+        }
     }
 ];
 
@@ -134,6 +180,25 @@ const stmts = [
             else_clause: "Option<BlockStmt<'a>>",
             end_token: "Token",
         }
+    },
+    {
+        name: "WhileStmt",
+        ename: "While",
+        format: "(while {} {})", fargs: "self.condition, self.block",
+        fields: {
+            while_token: "Token",
+            condition: "Expr<'a>",
+            block: "BlockStmt<'a>",
+            end_token: "Token",
+        }
+    },
+    {
+        name: "ExprStmt",
+        ename: "ExprStmt",
+        format: "{}", fargs: "self.expr",
+        fields: {
+            expr: "Expr<'a>"
+        }
     }
 ]
 
@@ -193,6 +258,8 @@ function createExprs(exprs) {
         use std::fmt::{self, Debug};
 
         use crate::compiler::{lexical_analysis::Token, string_handling::StringAtom};
+
+        use bumpalo::collections::Vec;
 
         #[derive(Debug, Clone)]
         pub enum Expr<'a> {

@@ -1,14 +1,17 @@
-use std::{fmt, iter, ptr};
+use std::{
+    fmt::{self, Write},
+    iter, ptr,
+};
 
-use intmap::IntMap;
-
-use crate::hash_string;
+#[cfg(feature = "string_interning")]
+use {crate::hash_string, intmap::IntMap};
 
 use super::{Value, VM};
 
 #[derive(Debug)]
 pub enum HeapValue {
     String(String),
+    List(Vec<Value>),
 }
 
 #[derive(Debug)]
@@ -18,11 +21,32 @@ pub struct HeapValueHeader {
     pub payload: HeapValue,
 }
 
-impl fmt::Display for HeapValueHeader {
+impl HeapValueHeader {
+    pub fn fmt<'a, 'b>(&'a self, vm: &'a VM<'b>) -> FormatableHeapValue<'a, 'b> {
+        FormatableHeapValue { value: &self, vm }
+    }
+}
+
+pub struct FormatableHeapValue<'a, 'b> {
+    value: &'a HeapValueHeader,
+    vm: &'a VM<'b>,
+}
+
+impl<'a, 'b> fmt::Display for FormatableHeapValue<'a, 'b> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match &self.payload {
-            HeapValue::String(string) => f.write_str(&string),
-        }
+        Ok(match self.value.payload {
+            HeapValue::String(ref string) => f.write_str(&string)?,
+            HeapValue::List(ref list) => {
+                f.write_char('[')?;
+                for (index, val) in list.iter().enumerate() {
+                    fmt::Display::fmt(&val.fmt(self.vm), f)?;
+                    if index + 1 < list.len() {
+                        f.write_str(", ")?;
+                    }
+                }
+                f.write_char(']')?;
+            }
+        })
     }
 }
 
@@ -30,6 +54,7 @@ impl fmt::Display for HeapValueHeader {
 pub struct MemoryManager {
     heap_vals: *mut HeapValueHeader,
 
+    #[cfg(feature = "string_interning")]
     intern_string_map: IntMap<*mut HeapValueHeader>,
 
     total_allocs: u32,
@@ -42,10 +67,18 @@ impl MemoryManager {
             heap_vals: ptr::null_mut(),
             total_allocs: 0,
             total_deallocs: 0,
+            #[cfg(feature = "string_interning")]
             intern_string_map: IntMap::new(),
         }
     }
 
+    #[cfg(not(feature = "string_interning"))]
+    pub fn alloc_string<'a, 'b, 'c>(&'a mut self, vm: &'b VM<'c>, string: String) -> Value {
+        let ptr = self.alloc(vm, HeapValue::String(string));
+        Value::Heap(ptr)
+    }
+
+    #[cfg(feature = "string_interning")]
     pub fn alloc_string<'a, 'b, 'c>(&'a mut self, vm: &'b VM<'c>, string: String) -> Value {
         let string_hash = hash_string(&string);
         let val = match self.intern_string_map.get(string_hash) {
@@ -69,6 +102,12 @@ impl MemoryManager {
         val
     }
 
+    pub fn alloc_list<'a, 'b, 'c>(&'a mut self, vm: &'b VM<'c>, init_cap: usize) -> Value {
+        let backing_vec = Vec::with_capacity(init_cap);
+        let ptr = self.alloc(vm, HeapValue::List(backing_vec));
+        Value::Heap(ptr)
+    }
+
     fn alloc<'a, 'b, 'c>(&'a mut self, vm: &'b VM<'c>, val: HeapValue) -> *mut HeapValueHeader {
         let heap_val = HeapValueHeader {
             is_marked: false,
@@ -85,11 +124,11 @@ impl MemoryManager {
         // println!("MemoryManager allocated: {:?}", unsafe { &*val_pointer });
 
         if self.should_gc() {
-            //     println!("=============GC START==========");
-            //     println!("Stack:");
-            //     vm.stack
-            //         .iter()
-            //         .for_each(|val| println!("    {}: {:?}", val.fmt(&vm), val));
+            // println!("=============GC START==========");
+            // println!("Stack:");
+            // vm.stack
+            //     .iter()
+            //     .for_each(|val| println!("    {}: {:?}", val.fmt(&vm), val));
 
             let roots = vm
                 .stack
@@ -112,14 +151,14 @@ impl MemoryManager {
 
     pub fn gc<T: Iterator<Item = *mut HeapValueHeader>>(&mut self, roots: T) {
         // println!("\nAll Objects:");
-        let mut ptr = self.heap_vals;
-        unsafe {
-            while !ptr.is_null() {
-                // (*ptr).is_marked = false;
-                // println!("    obj: {:?}", *ptr);
-                ptr = (*ptr).next_heap_val;
-            }
-        }
+        // let mut ptr = self.heap_vals;
+        // unsafe {
+        //     while !ptr.is_null() {
+        //         (*ptr).is_marked = false;
+        //         println!("    obj: {:?}: {:?}", ptr, (*ptr).payload);
+        //         ptr = (*ptr).next_heap_val;
+        //     }
+        // }
 
         // println!("Marking...");
         // let mut mark_count = 0;
@@ -143,23 +182,40 @@ impl MemoryManager {
                 return;
             }
             (*ptr).is_marked = true;
-            // println!("MemoryManager marked: {}", *ptr);
+            // println!("MemoryManager marked: {:?}", (*ptr).payload);
+
+            // mark children
+            match (*ptr).payload {
+                // strings don't have any children
+                HeapValue::String(_) => {}
+
+                // mark heap all values a list contains
+                HeapValue::List(ref list) => list
+                    .iter()
+                    .map(|val| match val {
+                        Value::Heap(ptr) => Some(ptr),
+                        _ => None,
+                    })
+                    .flatten()
+                    .for_each(|ptr| self.mark(*ptr)),
+            };
         }
     }
 
     fn dealloc(&mut self, ptr: *mut HeapValueHeader) {
         let bbox = unsafe { Box::from_raw(ptr) };
-        // println!("MemoryManager deallocated: {}", bbox);
+        // println!("MemoryManager deallocated: {:?}", bbox.payload);
 
-        match bbox.payload {
-            HeapValue::String(str) => {
-                let hash = hash_string(&str);
-                let removed_value = self.intern_string_map.remove(hash);
-                assert!(
+        // remove string from intern table on dealloc
+        #[cfg(feature = "string_interning")]
+        if let HeapValue::String(ref str) = bbox.payload {
+            // println!("deallocing: {}", str);
+            let hash = hash_string(&str);
+            let removed_value = self.intern_string_map.remove(hash);
+            assert!(
                     removed_value.is_some(),
                     "heap string was deallocated, but wasn't removed from intern table, intern map: {:?}", self.intern_string_map
                 );
-            }
         }
 
         self.total_deallocs += 1;
@@ -176,6 +232,11 @@ impl MemoryManager {
                 self.dealloc(self.heap_vals);
                 self.heap_vals = next;
             }
+            // unmark the value, so it can be sweeped later, unless it's marked again.
+            if !self.heap_vals.is_null() {
+                (*self.heap_vals).is_marked = false;
+            }
+
             // if there are any objects left.
             if !self.heap_vals.is_null() {
                 // this algorithm consists of two pointers:
@@ -232,10 +293,24 @@ impl MemoryManager {
 impl Drop for MemoryManager {
     fn drop(&mut self) {
         println!(
-            "Dropping memory manager, stats: ( total_allocs: {}, total_deallocs: {} )",
+            "MemoryMemanager.drop called, stats: ( total_allocs: {}, total_deallocs: {} )",
             self.total_allocs, self.total_deallocs
         );
-        self.dealloc_all();
+        println!("doing final gc");
+        self.gc(iter::empty());
+        println!(
+            "after final gc, stats: ( total_allocs: {}, total_deallocs: {} )",
+            self.total_allocs, self.total_deallocs
+        );
+        println!("remaining objects:");
+        let mut ptr = self.heap_vals;
+        unsafe {
+            while !ptr.is_null() {
+                println!("    {:?}: {:?}", ptr, (*ptr).payload);
+                ptr = (*ptr).next_heap_val;
+            }
+            self.dealloc_all();
+        }
         println!(
             "Memory manager dropped, stats: ( total_allocs: {}, total_deallocs: {} )",
             self.total_allocs, self.total_deallocs

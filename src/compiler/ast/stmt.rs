@@ -1,3 +1,4 @@
+
 use std::fmt::{self, Debug, Write};
 
 use crate::compiler::lexical_analysis::Token;
@@ -14,6 +15,8 @@ pub enum Stmt<'a> {
     StmtList(&'a StmtList<'a>),
     Program(&'a ProgramStmt<'a>),
     If(&'a IfStmt<'a>),
+    While(&'a WhileStmt<'a>),
+    ExprStmt(&'a ExprStmt<'a>),
 }
 
 impl<'a> fmt::Display for Stmt<'a> {
@@ -25,6 +28,8 @@ impl<'a> fmt::Display for Stmt<'a> {
             Stmt::StmtList(e) => fmt::Display::fmt(e, f),
             Stmt::Program(e) => fmt::Display::fmt(e, f),
             Stmt::If(e) => fmt::Display::fmt(e, f),
+            Stmt::While(e) => fmt::Display::fmt(e, f),
+            Stmt::ExprStmt(e) => fmt::Display::fmt(e, f),
         }
     }
 }
@@ -204,5 +209,60 @@ impl<'a> fmt::Display for IfStmt<'a> {
             f.write_fmt(format_args!(" else {}", ec))?;
         }
         f.write_char(')')
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct WhileStmt<'a> {
+    pub while_token: Token,
+    pub condition: Expr<'a>,
+    pub block: BlockStmt<'a>,
+    pub end_token: Token,
+}
+
+impl<'a> WhileStmt<'a> {
+    pub fn new(
+        while_token: Token,
+        condition: Expr<'a>,
+        block: BlockStmt<'a>,
+        end_token: Token,
+    ) -> WhileStmt<'a> {
+        WhileStmt {
+            while_token,
+            condition,
+            block,
+            end_token,
+        }
+    }
+
+    pub fn into_stmt(self, arena: &'a bumpalo::Bump) -> Stmt<'a> {
+        Stmt::While(arena.alloc(self))
+    }
+}
+
+impl<'a> fmt::Display for WhileStmt<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("(while {} {})", self.condition, self.block))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ExprStmt<'a> {
+    pub expr: Expr<'a>,
+}
+
+impl<'a> ExprStmt<'a> {
+    pub fn new(expr: Expr<'a>) -> ExprStmt<'a> {
+        ExprStmt { expr }
+    }
+
+    pub fn into_stmt(self, arena: &'a bumpalo::Bump) -> Stmt<'a> {
+        Stmt::ExprStmt(arena.alloc(self))
+    }
+}
+
+impl<'a> fmt::Display for ExprStmt<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("{}", self.expr))
     }
 }

@@ -6,8 +6,15 @@ pub enum Instruction {
     Sub,
     Div,
     Negate,
+    Modulo,
 
     Not,
+
+    CreateList,
+    CreateListWithCap,
+    CreateListWithCapW,
+    ListPush,
+    ListGetIndex,
 
     LoadConstNum,
     LoadConstNumW,

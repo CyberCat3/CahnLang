@@ -1,0 +1,22 @@
+let fizz_count := 1000
+
+let i := 1
+while i <= fizz_count do
+    let output := ""
+
+    if i % 3 = 0 then
+        output := output .. "Fizz"
+    end
+
+    if i % 5 = 0 then
+        output := output .. "Buzz"
+    end
+
+    if output = "" then
+        print i
+    else
+        print output;
+    end
+
+    i := i + 1
+end

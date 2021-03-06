@@ -2,13 +2,33 @@ use std::fmt;
 
 use super::{mem_manager::HeapValueHeader, VM};
 
-#[derive(Debug, Clone, Copy, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, PartialEq, PartialOrd)]
 pub enum Value {
     Bool(bool),
     Nil,
     Number(f64),
     StringLiteral { start_index: u32, end_index: u32 },
     Heap(*mut HeapValueHeader),
+}
+
+impl fmt::Debug for Value {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        Ok(match self {
+            Value::Nil => f.write_str("Nil")?,
+            Value::Bool(b) => f.write_fmt(format_args!("Bool({})", b))?,
+            Value::Number(num) => f.write_fmt(format_args!("Number({})", num))?,
+
+            Value::StringLiteral {
+                start_index,
+                end_index,
+            } => f.write_fmt(format_args!(
+                "StringLiteral({}..{})",
+                start_index, end_index
+            ))?,
+
+            Value::Heap(ptr) => f.write_fmt(format_args!("HeapPtr({:?})", *ptr))?,
+        })
+    }
 }
 
 impl Value {
@@ -41,7 +61,7 @@ impl<'a, 'b> fmt::Display for FormatableValue<'a, 'b> {
                 end_index,
             } => f.write_str(&self.vm.exec.string_data[start_index as usize..end_index as usize]),
 
-            Value::Heap(heap_val) => fmt::Display::fmt(unsafe { &*heap_val }, f),
+            Value::Heap(heap_val) => unsafe { fmt::Display::fmt(&(*heap_val).fmt(self.vm), f) },
         }
     }
 }

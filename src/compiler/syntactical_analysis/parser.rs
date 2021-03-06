@@ -122,7 +122,7 @@ impl<'a> Parser<'a> {
             "expected identifier after variable declaration".into()
         })?;
 
-        let _assignment_operator = self.expect(TokenType::SemicolonEqual, || {
+        let _assignment_operator = self.expect(TokenType::ColonEqual, || {
             "expected := after variable name".into()
         })?;
 
@@ -167,25 +167,46 @@ impl<'a> Parser<'a> {
         }
     }
 
+    fn finish_while_stmt(&self, while_token: Token) -> Result<WhileStmt<'a>> {
+        let condition = self.parse_expression()?;
+        let do_token = self.expect(TokenType::Do, || {
+            "expected 'do' after condition in while statement".into()
+        })?;
+        let statements = self.parse_statement_list()?;
+        let end_token = self.expect(TokenType::End, || "expected 'end' after while body".into())?;
+        let block = BlockStmt::new(do_token, statements, end_token.clone());
+        Ok(WhileStmt::new(while_token, condition, block, end_token))
+    }
+
     fn parse_statement(&self) -> Result<Stmt<'a>> {
-        let token = self.advance_token();
+        let node = match self.peek_token().token_type {
+            TokenType::Let => self
+                .finish_var_decl_statement(self.advance_token())?
+                .into_stmt(self.arena),
 
-        Ok(match token.token_type {
-            TokenType::Let => self.finish_var_decl_statement(token)?.into_stmt(self.arena),
+            TokenType::Print => self
+                .finish_print_statement(self.advance_token())?
+                .into_stmt(self.arena),
 
-            TokenType::Print => self.finish_print_statement(token)?.into_stmt(self.arena),
+            TokenType::Block => self
+                .finish_block_stmt(self.advance_token())?
+                .into_stmt(self.arena),
 
-            TokenType::Block => self.finish_block_stmt(token)?.into_stmt(self.arena),
+            TokenType::If => self
+                .finish_if_stmt(self.advance_token())?
+                .into_stmt(self.arena),
 
-            TokenType::If => self.finish_if_stmt(token)?.into_stmt(self.arena),
+            TokenType::While => self
+                .finish_while_stmt(self.advance_token())?
+                .into_stmt(self.arena),
 
-            _ => {
-                return Err(ParseError::UnexpectedToken {
-                    token,
-                    message: "expected statement".into(),
-                })
-            }
-        })
+            _ => ExprStmt::new(self.parse_expression()?).into_stmt(self.arena),
+        };
+
+        // eat optional semicolons
+        while self.check_advance(TokenType::Semicolon).is_some() {}
+
+        Ok(node)
     }
 
     // fn finish_if_expression(&self, if_token: Token) -> Result<IfExpr<'a>> {
@@ -255,6 +276,44 @@ impl<'a> Parser<'a> {
         return Ok(GroupExpr::new(paren_open, expr, paren_close));
     }
 
+    fn finish_list_expression(&self, bracket_open: Token) -> Result<ListExpr<'a>> {
+        // zero-element list
+        if let Some(bracket_close) = self.check_advance(TokenType::BracketClose) {
+            return Ok(ListExpr::new(
+                bracket_open,
+                bumpalo::vec![in self.arena],
+                bracket_close,
+            ));
+        }
+
+        // single-element list
+        let first_elem = self.parse_expression()?;
+
+        if let Some(bracket_close) = self.check_advance(TokenType::BracketClose) {
+            return Ok(ListExpr::new(
+                bracket_open,
+                bumpalo::vec![in self.arena; first_elem],
+                bracket_close,
+            ));
+        }
+
+        // multi-element list
+        let mut elements = bumpalo::vec![in self.arena; first_elem];
+
+        while self.check_advance(TokenType::Comma).is_some() {
+            if let Some(bracket_close) = self.check_advance(TokenType::BracketClose) {
+                return Ok(ListExpr::new(bracket_open, elements, bracket_close));
+            }
+            elements.push(self.parse_expression()?);
+        }
+
+        let bracket_close = self.expect(TokenType::BracketClose, || {
+            "expected ']' to terminate list".into()
+        })?;
+
+        Ok(ListExpr::new(bracket_open, elements, bracket_close))
+    }
+
     fn parse_expression(&self) -> Result<Expr<'a>> {
         self.parse_assignment()
     }
@@ -262,10 +321,10 @@ impl<'a> Parser<'a> {
     fn parse_assignment(&self) -> Result<Expr<'a>> {
         let expr = self.parse_and()?;
 
-        if let Some(assignment_operator) = self.check_advance(TokenType::SemicolonEqual) {
+        if let Some(assignment_operator) = self.check_advance(TokenType::ColonEqual) {
             let right_expr = self.parse_and()?;
 
-            if let Some(chained_operator) = self.check_advance(TokenType::SemicolonEqual) {
+            if let Some(chained_operator) = self.check_advance(TokenType::ColonEqual) {
                 return Err(ParseError::ChainingAssignmentOperator {
                     operator: chained_operator,
                 });
@@ -332,16 +391,18 @@ impl<'a> Parser<'a> {
             expr =
                 InfixExpr::new(expr, operator, self.parse_multiplication()?).into_expr(self.arena);
         }
-
         Ok(expr)
     }
 
     fn parse_multiplication(&self) -> Result<Expr<'a>> {
         let mut expr = self.parse_unary()?;
 
-        while let Some(operator) =
-            self.check_advance_any(&[TokenType::Star, TokenType::Slash, TokenType::DoubleSlash])
-        {
+        while let Some(operator) = self.check_advance_any(&[
+            TokenType::Star,
+            TokenType::Slash,
+            TokenType::DoubleSlash,
+            TokenType::Percent,
+        ]) {
             expr = InfixExpr::new(expr, operator, self.parse_unary()?).into_expr(self.arena);
         }
 
@@ -357,13 +418,79 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_exponent(&self) -> Result<Expr<'a>> {
-        let expr = self.parse_atom()?;
+        let expr = self.parse_call()?;
 
         if let Some(operator) = self.check_advance(TokenType::DoubleStar) {
             Ok(InfixExpr::new(expr, operator, self.parse_unary()?).into_expr(self.arena))
         } else {
             Ok(expr)
         }
+    }
+
+    fn parse_call(&self) -> Result<Expr<'a>> {
+        let mut expr = self.parse_atom()?;
+
+        'outer: while let Some(open) =
+            self.check_advance_any(&[TokenType::ParenOpen, TokenType::BracketOpen])
+        {
+            match open.token_type {
+                TokenType::BracketOpen => {
+                    let bracket_open = open;
+                    let index = self.parse_expression()?;
+
+                    let bracket_close = self.expect(TokenType::BracketClose, || {
+                        "expected ] to close subscript operator".into()
+                    })?;
+
+                    expr = SubscriptExpr::new(expr, bracket_open, index, bracket_close)
+                        .into_expr(self.arena);
+                }
+
+                TokenType::ParenOpen => {
+                    let paren_open = open;
+                    // zero arg
+                    if let Some(paren_close) = self.check_advance(TokenType::ParenClose) {
+                        expr = CallExpr::new(
+                            expr,
+                            paren_open,
+                            bumpalo::vec![in self.arena],
+                            paren_close,
+                        )
+                        .into_expr(self.arena);
+                        continue 'outer;
+                    }
+
+                    let mut args = bumpalo::vec![in self.arena; self.parse_expression()?];
+
+                    // one arg
+                    if let Some(paren_close) = self.check_advance(TokenType::ParenClose) {
+                        expr = CallExpr::new(expr, paren_open, args, paren_close)
+                            .into_expr(self.arena);
+
+                        continue 'outer;
+                    }
+
+                    // multi arg
+                    while self.check_advance(TokenType::Comma).is_some() {
+                        if let Some(paren_close) = self.check_advance(TokenType::ParenClose) {
+                            expr = CallExpr::new(expr, paren_open, args, paren_close)
+                                .into_expr(self.arena);
+
+                            continue 'outer;
+                        }
+                        args.push(self.parse_expression()?);
+                    }
+
+                    let paren_close = self.expect(TokenType::ParenClose, || {
+                        "expected ')' to close argument list".into()
+                    })?;
+
+                    expr = CallExpr::new(expr, paren_open, args, paren_close).into_expr(self.arena)
+                }
+                _ => unreachable!(),
+            }
+        }
+        Ok(expr)
     }
 
     fn parse_atom(&self) -> Result<Expr<'a>> {
@@ -390,6 +517,7 @@ impl<'a> Parser<'a> {
 
             TokenType::ParenOpen => self.finish_group_expression(token)?.into_expr(self.arena),
 
+            TokenType::BracketOpen => self.finish_list_expression(token)?.into_expr(self.arena),
             _ => {
                 return Err(ParseError::BadToken {
                     message: "expected either a literal, a variable or (".into(),

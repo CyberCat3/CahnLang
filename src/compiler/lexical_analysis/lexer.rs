@@ -32,6 +32,8 @@ struct KeywordAtoms {
     k_or: StringAtom,
     k_not: StringAtom,
     k_block: StringAtom,
+    k_while: StringAtom,
+    k_do: StringAtom,
 }
 
 impl KeywordAtoms {
@@ -51,6 +53,8 @@ impl KeywordAtoms {
             k_or: interner.intern("or"),
             k_not: interner.intern("not"),
             k_block: interner.intern("block"),
+            k_while: interner.intern("while"),
+            k_do: interner.intern("do"),
         }
     }
 }
@@ -138,7 +142,7 @@ impl<'a> Lexer<'a> {
                             }
                         }
                     } else {
-                        while !self.mmatch('\n') {
+                        while !self.mmatch('\n') && !self.peek_char().is_none() {
                             self.advance();
                         }
                     }
@@ -198,7 +202,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn finish_identifier(&self) -> Token {
-        while matches!(self.peek_char(), Some(c) if c.is_alphanumeric()) {
+        while matches!(self.peek_char(), Some(c) if c.is_alphanumeric() || c == '_') {
             self.advance();
         }
         let mut token = self.make_token(TokenType::Identifier);
@@ -220,6 +224,8 @@ impl<'a> Lexer<'a> {
             w if w == &keywords.k_or => TokenType::Or,
             w if w == &keywords.k_not => TokenType::Not,
             w if w == &keywords.k_block => TokenType::Block,
+            w if w == &keywords.k_while => TokenType::While,
+            w if w == &keywords.k_do => TokenType::Do,
             _ => TokenType::Identifier,
         };
         token
@@ -239,6 +245,9 @@ impl<'a> Lexer<'a> {
             '(' => self.make_token(TokenType::ParenOpen),
             ')' => self.make_token(TokenType::ParenClose),
 
+            '[' => self.make_token(TokenType::BracketOpen),
+            ']' => self.make_token(TokenType::BracketClose),
+
             '+' => self.make_token(TokenType::Plus),
             '-' => self.make_token(TokenType::Minus),
 
@@ -246,7 +255,12 @@ impl<'a> Lexer<'a> {
 
             '"' => self.finish_string(),
 
+            ',' => self.make_token(TokenType::Comma),
             '.' if self.mmatch('.') => self.make_token(TokenType::DoubleDot),
+
+            '%' => self.make_token(TokenType::Percent),
+
+            ';' => self.make_token(TokenType::Semicolon),
 
             '*' => self.make_token(if self.mmatch('*') {
                 TokenType::DoubleStar
@@ -272,7 +286,7 @@ impl<'a> Lexer<'a> {
                 TokenType::Greater
             }),
 
-            ':' if self.mmatch('=') => self.make_token(TokenType::SemicolonEqual),
+            ':' if self.mmatch('=') => self.make_token(TokenType::ColonEqual),
 
             '!' if self.mmatch('=') => self.make_token(TokenType::BangEqual),
 

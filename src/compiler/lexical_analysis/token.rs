@@ -8,6 +8,7 @@ pub enum TokenType {
     Minus,
     Star,
     Slash,
+    Percent,
     DoubleDot,
     DoubleStar,
     DoubleSlash,
@@ -22,11 +23,16 @@ pub enum TokenType {
     ParenOpen,
     ParenClose,
 
+    BracketOpen,
+    BracketClose,
+
     Let,
+
+    Comma,
 
     BangEqual,
     Equal,
-    SemicolonEqual,
+    ColonEqual,
 
     Less,
     LessEqual,
@@ -39,6 +45,8 @@ pub enum TokenType {
     ElseIf,
     Else,
     End,
+    While,
+    Do,
 
     And,
     Or,
@@ -47,6 +55,7 @@ pub enum TokenType {
     Print,
 
     Eof,
+    Semicolon,
     BadCharacter,
 }
 

@@ -98,11 +98,13 @@ INSTRUCTIONS:\n",
                     i += 4;
                 }
 
-                Instruction::GetLocal | Instruction::SetLocal => {
+                Instruction::GetLocal | Instruction::SetLocal | Instruction::CreateListWithCap => {
                     f.write_fmt(format_args!("    {}", code[i]))?;
                     i += 1;
                 }
-                Instruction::GetLocalW | Instruction::SetLocalW => {
+                Instruction::GetLocalW
+                | Instruction::SetLocalW
+                | Instruction::CreateListWithCapW => {
                     let index = u16::from_le_bytes([code[i], code[i + 1]]);
                     f.write_fmt(format_args!("    {}", index))?;
                     i += 2
@@ -127,6 +129,9 @@ INSTRUCTIONS:\n",
                     ))?;
                 }
 
+                Instruction::CreateList => {}
+                Instruction::ListPush => {}
+                Instruction::Modulo => {}
                 Instruction::Add => {}
                 Instruction::Mul => {}
                 Instruction::Sub => {}
@@ -145,6 +150,7 @@ INSTRUCTIONS:\n",
                 Instruction::Pop => {}
                 Instruction::Print => {}
                 Instruction::Concat => {}
+                Instruction::ListGetIndex => {}
             }
 
             f.write_char('\n')?;

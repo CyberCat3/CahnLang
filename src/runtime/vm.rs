@@ -14,6 +14,8 @@ use std::{
     mem,
 };
 
+use super::mem_manager::HeapValue;
+
 pub struct VM<'a> {
     pub stack: Vec<Value>,
     ip: usize,
@@ -246,6 +248,26 @@ impl<'a> VM<'a> {
                 }
             }
 
+            Instruction::Modulo => {
+                let right = self.pop();
+                let left = self.pop();
+
+                match (left, right) {
+                    (Value::Number(left_num), Value::Number(right_val)) => {
+                        self.push(Value::Number(left_num % right_val))
+                    }
+                    _ => {
+                        return Err(RuntimeError::TypeError {
+                            message: format!(
+                                "modulo-instruction expected two numbers, but got '{}' and '{}'",
+                                left.fmt(self),
+                                right.fmt(self)
+                            ),
+                        })
+                    }
+                }
+            }
+
             Instruction::Negate => {
                 let val = self.pop();
 
@@ -380,6 +402,78 @@ impl<'a> VM<'a> {
                     self.ip = jump_location;
                 }
             }
+            Instruction::CreateList => {
+                let list = self.mem_manager.borrow_mut().alloc_list(self, 0);
+                self.push(list)
+            }
+            Instruction::CreateListWithCap => {
+                let init_cap = self.read_u8() as usize;
+                let list = self.mem_manager.borrow_mut().alloc_list(self, init_cap);
+                self.push(list)
+            }
+            Instruction::CreateListWithCapW => {
+                let init_cap = self.read_u16() as usize;
+                let list = self.mem_manager.borrow_mut().alloc_list(self, init_cap);
+                self.push(list)
+            }
+            Instruction::ListPush => {
+                let right = self.pop();
+                let list_val = self.peek();
+
+                (|| unsafe {
+                    if let Value::Heap(ptr) = list_val {
+                        if let HeapValue::List(list) = &mut (*ptr).payload {
+                            list.push(right);
+                            return Ok(());
+                        }
+                    }
+                    return Err(RuntimeError::TypeError {
+                        message: format!(
+                            "tried to push an element to a non-list type: '{}'",
+                            right.fmt(self)
+                        ),
+                    });
+                })()?;
+            }
+
+            Instruction::ListGetIndex => {
+                let index = self.pop();
+                let list = self.pop();
+
+                let list = (|| unsafe {
+                    if let Value::Heap(ptr) = list {
+                        if let HeapValue::List(list) = &mut (*ptr).payload {
+                            return Ok(list);
+                        }
+                    }
+                    Err(RuntimeError::TypeError {
+                        message: format!("[] operator expected a list, got {}", list.fmt(self)),
+                    })
+                })()?;
+
+                let index = match index {
+                    Value::Number(num) => {
+                        if num < 0.0 || num as usize >= list.len() {
+                            return Err(RuntimeError::IndexOutOfBounds {
+                                index: num,
+                                len: list.len(),
+                            });
+                        }
+                        num as usize
+                    }
+
+                    _ => {
+                        return Err(RuntimeError::TypeError {
+                            message: format!(
+                                "[] operator expected number, got {}",
+                                index.fmt(self)
+                            ),
+                        })
+                    }
+                };
+
+                self.push(list[index]);
+            }
         };
         Ok(())
     }
@@ -401,7 +495,13 @@ impl<'a> VM<'a> {
             //     padding.push('-');
             // }
 
-            // print!("{:?}{}-->   ", instruction, padding);
+            // print!(
+            //     "{}:{}\t{:?}{}-->   ",
+            //     self.exec.source_file,
+            //     self.exec.code_map[self.ip - 1],
+            //     instruction,
+            //     padding,
+            // );
             // for val in &self.stack {
             //     print!("{:?}({})   ", val, (*val).fmt(&self));
             // }

@@ -187,6 +187,29 @@ impl CodeGenerator {
         self.emit_bytes(&(index as u16).to_le_bytes());
     }
 
+    fn emit_assignment_instructions<'a>(
+        &mut self,
+        target: &Expr<'a>,
+        source: &Expr<'a>,
+    ) -> Result<()> {
+        let identifier = match target {
+            Expr::Var(ve) => &ve.identifier,
+            other => {
+                return Err(CodeGenError::InvalidAssignmentTarget {
+                    message: format!("{}", other),
+                })
+            }
+        };
+
+        self.visit_expr(source)?;
+
+        self.set_source_pos(identifier.pos);
+        let local = self.get_local_index_by_token(&identifier)?;
+        self.emit_instruction(Instruction::Dup);
+        self.emit_set_local_instruction(local);
+        Ok(())
+    }
+
     fn emit_load_number_instruction(&mut self, number: f64, lexeme: StringAtom) {
         if number >= u8::MIN as f64 && number <= u8::MAX as f64 && number.fract() == 0.0 {
             let number = number as u8;
@@ -306,25 +329,31 @@ impl CodeGenerator {
             }
 
             Expr::Infix(ie) => {
-                self.visit_expr(&ie.left)?;
-                self.visit_expr(&ie.right)?;
+                if ie.operator.token_type == TokenType::ColonEqual {
+                    self.emit_assignment_instructions(&ie.left, &ie.right)?;
+                } else {
+                    self.visit_expr(&ie.left)?;
+                    self.visit_expr(&ie.right)?;
 
-                self.set_source_pos(ie.operator.pos);
-                self.emit_instruction(match ie.operator.token_type {
-                    TokenType::Plus => Instruction::Add,
-                    TokenType::Minus => Instruction::Sub,
-                    TokenType::Star => Instruction::Mul,
-                    TokenType::Slash => Instruction::Div,
+                    self.set_source_pos(ie.operator.pos);
 
-                    TokenType::Equal => Instruction::Equal,
-                    TokenType::Less => Instruction::LessThan,
-                    TokenType::LessEqual => Instruction::LessThanOrEqual,
-                    TokenType::Greater => Instruction::GreaterThan,
-                    TokenType::GreaterEqual => Instruction::GreaterThanOrEqual,
-                    TokenType::DoubleDot => Instruction::Concat,
+                    self.emit_instruction(match ie.operator.token_type {
+                        TokenType::Plus => Instruction::Add,
+                        TokenType::Minus => Instruction::Sub,
+                        TokenType::Star => Instruction::Mul,
+                        TokenType::Slash => Instruction::Div,
+                        TokenType::Percent => Instruction::Modulo,
 
-                    other => panic!("this token type should not be a infix expr: {:?}", other),
-                });
+                        TokenType::Equal => Instruction::Equal,
+                        TokenType::Less => Instruction::LessThan,
+                        TokenType::LessEqual => Instruction::LessThanOrEqual,
+                        TokenType::Greater => Instruction::GreaterThan,
+                        TokenType::GreaterEqual => Instruction::GreaterThanOrEqual,
+                        TokenType::DoubleDot => Instruction::Concat,
+
+                        other => panic!("this token type should not be a infix expr: {:?}", other),
+                    });
+                }
             }
 
             Expr::Var(ve) => {
@@ -332,6 +361,44 @@ impl CodeGenerator {
                 self.set_source_pos(ve.identifier.pos);
                 self.emit_get_local_instruction(stack_offset);
             }
+
+            Expr::List(le) => {
+                let len = le.elements.len();
+
+                self.set_source_pos(le.bracket_open.pos);
+                match len {
+                    0 => self.emit_instruction(Instruction::CreateList),
+
+                    len if len <= u8::MAX as usize => {
+                        self.emit_instruction(Instruction::CreateListWithCap);
+                        self.emit_byte(len as u8);
+                    }
+
+                    len if len <= u16::MAX as usize => {
+                        self.emit_instruction(Instruction::CreateListWithCapW);
+                        self.emit_bytes(&u16::to_le_bytes(len as u16));
+                    }
+
+                    _ => {
+                        self.emit_instruction(Instruction::CreateListWithCapW);
+                        self.emit_bytes(&u16::MAX.to_le_bytes());
+                    }
+                }
+
+                for elem in &le.elements {
+                    self.visit_expr(elem)?;
+                    self.emit_instruction(Instruction::ListPush);
+                }
+            }
+
+            Expr::Subscript(se) => {
+                self.visit_expr(&se.subscriptee)?;
+                self.visit_expr(&se.index)?;
+                self.set_source_pos(se.bracket_open.pos);
+                self.emit_instruction(Instruction::ListGetIndex);
+            }
+
+            Expr::Call(_) => unimplemented!("call operator () not implemented"),
         };
 
         Ok(())
@@ -402,6 +469,40 @@ impl CodeGenerator {
                     self.visit_block_stmt(else_block)?;
                     self.patch_jump_instruction(else_jump.unwrap(), self.code.len());
                 }
+            }
+
+            Stmt::While(ws) => {
+                let start_adress = self.code.len();
+                assert!(
+                    start_adress <= u32::MAX as usize,
+                    "while statement start is too out on the adress space."
+                );
+                // the adress where our while statement starts
+                let start_adress = start_adress as u32;
+
+                // compile the condition
+                self.visit_expr(&ws.condition)?;
+
+                // if the condition was false, we need to jump over the entire body, which emit the instruction for here.
+                self.set_source_pos(ws.while_token.pos);
+                let loop_done_adress = self.emit_jump_instruction(Instruction::JumpIfFalse);
+
+                // compile the body
+                self.visit_block_stmt(&ws.block)?;
+
+                // when the body has executed, jump back to the start, so we actually loop.
+                self.set_source_pos(ws.end_token.pos);
+                self.emit_instruction(Instruction::Jump);
+                self.emit_bytes(&start_adress.to_le_bytes());
+
+                // know we know were to jump to, to skip the body, so we patch the first jump.
+                self.patch_jump_instruction(loop_done_adress, self.code.len());
+            }
+
+            Stmt::ExprStmt(es) => {
+                self.visit_expr(&es.expr)?;
+                // statements are supposed to have a stack effect of 0, so we pop
+                self.emit_instruction(Instruction::Pop);
             }
         })
     }

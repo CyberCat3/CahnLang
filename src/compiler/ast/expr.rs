@@ -1,6 +1,9 @@
+
 use std::fmt::{self, Debug};
 
 use crate::compiler::{lexical_analysis::Token, string_handling::StringAtom};
+
+use bumpalo::collections::Vec;
 
 #[derive(Debug, Clone)]
 pub enum Expr<'a> {
@@ -11,6 +14,9 @@ pub enum Expr<'a> {
     Group(&'a GroupExpr<'a>),
     Prefix(&'a PrefixExpr<'a>),
     Infix(&'a InfixExpr<'a>),
+    List(&'a ListExpr<'a>),
+    Subscript(&'a SubscriptExpr<'a>),
+    Call(&'a CallExpr<'a>),
 }
 
 impl<'a> fmt::Display for Expr<'a> {
@@ -23,6 +29,9 @@ impl<'a> fmt::Display for Expr<'a> {
             Expr::Group(e) => fmt::Display::fmt(e, f),
             Expr::Prefix(e) => fmt::Display::fmt(e, f),
             Expr::Infix(e) => fmt::Display::fmt(e, f),
+            Expr::List(e) => fmt::Display::fmt(e, f),
+            Expr::Subscript(e) => fmt::Display::fmt(e, f),
+            Expr::Call(e) => fmt::Display::fmt(e, f),
         }
     }
 }
@@ -190,5 +199,120 @@ impl<'a> fmt::Display for InfixExpr<'a> {
             "({} {} {})",
             self.operator.lexeme, self.left, self.right
         ))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ListExpr<'a> {
+    pub bracket_open: Token,
+    pub elements: Vec<'a, Expr<'a>>,
+    pub bracket_close: Token,
+}
+
+impl<'a> ListExpr<'a> {
+    pub fn new(
+        bracket_open: Token,
+        elements: Vec<'a, Expr<'a>>,
+        bracket_close: Token,
+    ) -> ListExpr<'a> {
+        ListExpr {
+            bracket_open,
+            elements,
+            bracket_close,
+        }
+    }
+
+    pub fn into_expr(self, arena: &'a bumpalo::Bump) -> Expr<'a> {
+        Expr::List(arena.alloc(self))
+    }
+}
+
+impl<'a> fmt::Display for ListExpr<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        {
+            f.write_str("(list ")?;
+            for elem in &self.elements {
+                fmt::Display::fmt(elem, f)?;
+                f.write_str(", ")?;
+            }
+            f.write_str(")")?;
+        };
+        Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SubscriptExpr<'a> {
+    pub subscriptee: Expr<'a>,
+    pub bracket_open: Token,
+    pub index: Expr<'a>,
+    pub bracket_close: Token,
+}
+
+impl<'a> SubscriptExpr<'a> {
+    pub fn new(
+        subscriptee: Expr<'a>,
+        bracket_open: Token,
+        index: Expr<'a>,
+        bracket_close: Token,
+    ) -> SubscriptExpr<'a> {
+        SubscriptExpr {
+            subscriptee,
+            bracket_open,
+            index,
+            bracket_close,
+        }
+    }
+
+    pub fn into_expr(self, arena: &'a bumpalo::Bump) -> Expr<'a> {
+        Expr::Subscript(arena.alloc(self))
+    }
+}
+
+impl<'a> fmt::Display for SubscriptExpr<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!("([] {} {})", self.subscriptee, self.index))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct CallExpr<'a> {
+    pub callee: Expr<'a>,
+    pub paren_open: Token,
+    pub args: Vec<'a, Expr<'a>>,
+    pub paren_close: Token,
+}
+
+impl<'a> CallExpr<'a> {
+    pub fn new(
+        callee: Expr<'a>,
+        paren_open: Token,
+        args: Vec<'a, Expr<'a>>,
+        paren_close: Token,
+    ) -> CallExpr<'a> {
+        CallExpr {
+            callee,
+            paren_open,
+            args,
+            paren_close,
+        }
+    }
+
+    pub fn into_expr(self, arena: &'a bumpalo::Bump) -> Expr<'a> {
+        Expr::Call(arena.alloc(self))
+    }
+}
+
+impl<'a> fmt::Display for CallExpr<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        {
+            f.write_fmt(format_args!("(call {} ", self.callee))?;
+            for arg in &self.args {
+                fmt::Display::fmt(arg, f)?;
+                f.write_str(", ")?;
+            }
+            f.write_str(")")?;
+        };
+        Ok(())
     }
 }
