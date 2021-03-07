@@ -1,11 +1,10 @@
-
-use std::fmt::{self, Debug, Write};
-
-use crate::compiler::lexical_analysis::Token;
-
-use bumpalo::collections::Vec;
-
-use super::Expr;
+use {
+    super::*,
+    crate::compiler::lexical_analysis::Token,
+    bumpalo::collections::Vec,
+    itertools::Itertools,
+    std::fmt::{self, Debug, Write},
+};
 
 #[derive(Debug, Clone)]
 pub enum Stmt<'a> {
@@ -17,6 +16,7 @@ pub enum Stmt<'a> {
     If(&'a IfStmt<'a>),
     While(&'a WhileStmt<'a>),
     ExprStmt(&'a ExprStmt<'a>),
+    FnDecl(&'a FnDeclStmt<'a>),
 }
 
 impl<'a> fmt::Display for Stmt<'a> {
@@ -30,6 +30,7 @@ impl<'a> fmt::Display for Stmt<'a> {
             Stmt::If(e) => fmt::Display::fmt(e, f),
             Stmt::While(e) => fmt::Display::fmt(e, f),
             Stmt::ExprStmt(e) => fmt::Display::fmt(e, f),
+            Stmt::FnDecl(e) => fmt::Display::fmt(e, f),
         }
     }
 }
@@ -88,17 +89,17 @@ impl<'a> fmt::Display for VarDeclStmt<'a> {
 
 #[derive(Debug, Clone)]
 pub struct BlockStmt<'a> {
-    pub open_token: Token,
+    pub brace_open: Token,
     pub statements: StmtList<'a>,
-    pub close_token: Token,
+    pub brace_close: Token,
 }
 
 impl<'a> BlockStmt<'a> {
-    pub fn new(open_token: Token, statements: StmtList<'a>, close_token: Token) -> BlockStmt<'a> {
+    pub fn new(brace_open: Token, statements: StmtList<'a>, brace_close: Token) -> BlockStmt<'a> {
         BlockStmt {
-            open_token,
+            brace_open,
             statements,
-            close_token,
+            brace_close,
         }
     }
 
@@ -170,9 +171,7 @@ pub struct IfStmt<'a> {
     pub if_token: Token,
     pub condition: Expr<'a>,
     pub then_clause: BlockStmt<'a>,
-    pub else_token: Option<Token>,
     pub else_clause: Option<BlockStmt<'a>>,
-    pub end_token: Token,
 }
 
 impl<'a> IfStmt<'a> {
@@ -180,17 +179,13 @@ impl<'a> IfStmt<'a> {
         if_token: Token,
         condition: Expr<'a>,
         then_clause: BlockStmt<'a>,
-        else_token: Option<Token>,
         else_clause: Option<BlockStmt<'a>>,
-        end_token: Token,
     ) -> IfStmt<'a> {
         IfStmt {
             if_token,
             condition,
             then_clause,
-            else_token,
             else_clause,
-            end_token,
         }
     }
 
@@ -217,21 +212,14 @@ pub struct WhileStmt<'a> {
     pub while_token: Token,
     pub condition: Expr<'a>,
     pub block: BlockStmt<'a>,
-    pub end_token: Token,
 }
 
 impl<'a> WhileStmt<'a> {
-    pub fn new(
-        while_token: Token,
-        condition: Expr<'a>,
-        block: BlockStmt<'a>,
-        end_token: Token,
-    ) -> WhileStmt<'a> {
+    pub fn new(while_token: Token, condition: Expr<'a>, block: BlockStmt<'a>) -> WhileStmt<'a> {
         WhileStmt {
             while_token,
             condition,
             block,
-            end_token,
         }
     }
 
@@ -264,5 +252,44 @@ impl<'a> ExprStmt<'a> {
 impl<'a> fmt::Display for ExprStmt<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!("{}", self.expr))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FnDeclStmt<'a> {
+    pub fn_token: Token,
+    pub name: Token,
+    pub parameters: Vec<'a, Token>,
+    pub body: BlockStmt<'a>,
+}
+
+impl<'a> FnDeclStmt<'a> {
+    pub fn new(
+        fn_token: Token,
+        name: Token,
+        parameters: Vec<'a, Token>,
+        body: BlockStmt<'a>,
+    ) -> FnDeclStmt<'a> {
+        FnDeclStmt {
+            fn_token,
+            name,
+            parameters,
+            body,
+        }
+    }
+
+    pub fn into_stmt(self, arena: &'a bumpalo::Bump) -> Stmt<'a> {
+        Stmt::FnDecl(arena.alloc(self))
+    }
+}
+
+impl<'a> fmt::Display for FnDeclStmt<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!(
+            "(fn {} ({}) {})",
+            self.name,
+            self.parameters.iter().join(", "),
+            self.body
+        ))
     }
 }

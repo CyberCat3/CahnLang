@@ -1,9 +1,10 @@
-
-use std::fmt::{self, Debug};
-
-use crate::compiler::{lexical_analysis::Token, string_handling::StringAtom};
-
-use bumpalo::collections::Vec;
+use {
+    super::*,
+    crate::compiler::{lexical_analysis::Token, string_handling::StringAtom},
+    bumpalo::collections::Vec,
+    itertools::Itertools,
+    std::fmt::{self, Debug},
+};
 
 #[derive(Debug, Clone)]
 pub enum Expr<'a> {
@@ -17,6 +18,7 @@ pub enum Expr<'a> {
     List(&'a ListExpr<'a>),
     Subscript(&'a SubscriptExpr<'a>),
     Call(&'a CallExpr<'a>),
+    AnynFnDecl(&'a AnynFnDeclExpr<'a>),
 }
 
 impl<'a> fmt::Display for Expr<'a> {
@@ -32,6 +34,7 @@ impl<'a> fmt::Display for Expr<'a> {
             Expr::List(e) => fmt::Display::fmt(e, f),
             Expr::Subscript(e) => fmt::Display::fmt(e, f),
             Expr::Call(e) => fmt::Display::fmt(e, f),
+            Expr::AnynFnDecl(e) => fmt::Display::fmt(e, f),
         }
     }
 }
@@ -314,5 +317,40 @@ impl<'a> fmt::Display for CallExpr<'a> {
             f.write_str(")")?;
         };
         Ok(())
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct AnynFnDeclExpr<'a> {
+    pub fn_token: Token,
+    pub parameters: Vec<'a, Token>,
+    pub body: BlockStmt<'a>,
+}
+
+impl<'a> AnynFnDeclExpr<'a> {
+    pub fn new(
+        fn_token: Token,
+        parameters: Vec<'a, Token>,
+        body: BlockStmt<'a>,
+    ) -> AnynFnDeclExpr<'a> {
+        AnynFnDeclExpr {
+            fn_token,
+            parameters,
+            body,
+        }
+    }
+
+    pub fn into_expr(self, arena: &'a bumpalo::Bump) -> Expr<'a> {
+        Expr::AnynFnDecl(arena.alloc(self))
+    }
+}
+
+impl<'a> fmt::Display for AnynFnDeclExpr<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_fmt(format_args!(
+            "(fn ({}) {})",
+            self.parameters.iter().join(", "),
+            self.body
+        ))
     }
 }

@@ -1,3 +1,5 @@
+console.log("generating ast...");
+
 const exprs = [
     {
         name: "NumberExpr",
@@ -107,6 +109,16 @@ const exprs = [
             paren_open: "Token",
             args: "Vec<'a, Expr<'a>>",
             paren_close: "Token"
+        },
+    },
+    {
+        name: "AnynFnDeclExpr",
+        ename: "AnynFnDecl",
+        format: "(fn ({}) {})", fargs: `self.parameters.iter().join(", "), self.body`,
+        fields: {
+            fn_token: "Token",
+            parameters: "Vec<'a, Token>",
+            body: "BlockStmt<'a>",
         }
     }
 ];
@@ -136,9 +148,9 @@ const stmts = [
         ename: "Block",
         format: "(block {})", fargs: "self.statements",
         fields: {
-            open_token: "Token",
+            brace_open: "Token",
             statements: "StmtList<'a>",
-            close_token: "Token",
+            brace_close: "Token",
         }
     },
     {
@@ -176,9 +188,7 @@ const stmts = [
             if_token: "Token",
             condition: "Expr<'a>",
             then_clause: "BlockStmt<'a>",
-            else_token: "Option<Token>",
             else_clause: "Option<BlockStmt<'a>>",
-            end_token: "Token",
         }
     },
     {
@@ -189,7 +199,6 @@ const stmts = [
             while_token: "Token",
             condition: "Expr<'a>",
             block: "BlockStmt<'a>",
-            end_token: "Token",
         }
     },
     {
@@ -198,6 +207,17 @@ const stmts = [
         format: "{}", fargs: "self.expr",
         fields: {
             expr: "Expr<'a>"
+        }
+    },
+    {
+        name: "FnDeclStmt",
+        ename: "FnDecl",
+        format: "(fn {} ({}) {})", fargs: `self.name, self.parameters.iter().join(", "), self.body`,
+        fields: {
+            fn_token: "Token",
+            name: "Token",
+            parameters: "Vec<'a, Token>",
+            body: "BlockStmt<'a>",
         }
     }
 ]
@@ -255,12 +275,14 @@ function createExprStructAndImpl(expr) {
 
 function createExprs(exprs) {
     const fileString = `
-        use std::fmt::{self, Debug};
-
-        use crate::compiler::{lexical_analysis::Token, string_handling::StringAtom};
-
-        use bumpalo::collections::Vec;
-
+        use {
+            super::*,
+            crate::compiler::{lexical_analysis::Token, string_handling::StringAtom},
+            bumpalo::collections::Vec,
+            itertools::Itertools,
+            std::fmt::{self, Debug},
+        };
+    
         #[derive(Debug, Clone)]
         pub enum Expr<'a> {
             ${exprs.map(expr => `${expr.ename}(&'a ${expr.name}${structContainsLifeTime(expr) ? "<'a>" : ""}),`).join("\n")}
@@ -322,14 +344,14 @@ function createStmtStructAndImpl(stmt) {
 
 function createStmts(stmts) {
     const fileString = `
-        use std::fmt::{self, Debug, Write};
-
-        use crate::compiler::lexical_analysis::Token;
-
-        use bumpalo::collections::Vec;
-
-        use super::Expr;
-
+        use {
+            super::*,
+            crate::compiler::lexical_analysis::Token,
+            bumpalo::collections::Vec,
+            itertools::Itertools,
+            std::fmt::{self, Debug, Write},
+        };    
+    
         #[derive(Debug, Clone)]
         pub enum Stmt<'a> {
             ${stmts.map(stmt => `${stmt.ename}(&'a ${stmt.name}${structContainsLifeTime(stmt) ? "<'a>" : ""}),`).join("\n")}

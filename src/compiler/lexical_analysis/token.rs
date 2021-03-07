@@ -26,12 +26,15 @@ pub enum TokenType {
     BracketOpen,
     BracketClose,
 
+    BraceOpen,
+    BraceClose,
+
     Let,
 
     Comma,
 
     BangEqual,
-    Equal,
+    DoubleEqual,
     ColonEqual,
 
     Less,
@@ -39,14 +42,11 @@ pub enum TokenType {
     Greater,
     GreaterEqual,
 
-    Block,
+    Fn,
+
     If,
-    Then,
-    ElseIf,
     Else,
-    End,
     While,
-    Do,
 
     And,
     Or,
@@ -62,10 +62,17 @@ pub enum TokenType {
 pub mod token_groups {
     use super::TokenType::{self, *};
 
+    pub const BLOCK_ENDINGS: &[TokenType] = &[BraceClose, Eof];
+
     pub const LITERALS: &[TokenType] = &[Number, True, False];
-    pub const BLOCK_ENDINGS: &[TokenType] = &[End, Else, ElseIf, Eof];
-    pub const COMPARISON_OPERATORS: &[TokenType] =
-        &[Equal, Less, LessEqual, Greater, GreaterEqual, BangEqual];
+    pub const COMPARISON_OPERATORS: &[TokenType] = &[
+        DoubleEqual,
+        Less,
+        LessEqual,
+        Greater,
+        GreaterEqual,
+        BangEqual,
+    ];
     pub const PREFIX_OPERATORS: &[TokenType] = &[Not, Minus];
 }
 

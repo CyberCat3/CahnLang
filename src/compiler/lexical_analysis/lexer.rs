@@ -21,19 +21,15 @@ struct KeywordAtoms {
     k_let: StringAtom,
     k_nil: StringAtom,
     k_if: StringAtom,
-    k_elseif: StringAtom,
     k_else: StringAtom,
-    k_end: StringAtom,
-    k_then: StringAtom,
     k_print: StringAtom,
     k_true: StringAtom,
     k_false: StringAtom,
     k_and: StringAtom,
     k_or: StringAtom,
     k_not: StringAtom,
-    k_block: StringAtom,
     k_while: StringAtom,
-    k_do: StringAtom,
+    k_fn: StringAtom,
 }
 
 impl KeywordAtoms {
@@ -42,19 +38,15 @@ impl KeywordAtoms {
             k_let: interner.intern("let"),
             k_nil: interner.intern("nil"),
             k_if: interner.intern("if"),
-            k_elseif: interner.intern("elseif"),
             k_else: interner.intern("else"),
-            k_end: interner.intern("end"),
-            k_then: interner.intern("then"),
             k_print: interner.intern("print"),
             k_true: interner.intern("true"),
             k_false: interner.intern("false"),
             k_and: interner.intern("and"),
             k_or: interner.intern("or"),
             k_not: interner.intern("not"),
-            k_block: interner.intern("block"),
             k_while: interner.intern("while"),
-            k_do: interner.intern("do"),
+            k_fn: interner.intern("fn"),
         }
     }
 }
@@ -213,19 +205,15 @@ impl<'a> Lexer<'a> {
             w if w == &keywords.k_let => TokenType::Let,
             w if w == &keywords.k_nil => TokenType::Nil,
             w if w == &keywords.k_if => TokenType::If,
-            w if w == &keywords.k_elseif => TokenType::ElseIf,
             w if w == &keywords.k_else => TokenType::Else,
-            w if w == &keywords.k_end => TokenType::End,
-            w if w == &keywords.k_then => TokenType::Then,
             w if w == &keywords.k_print => TokenType::Print,
             w if w == &keywords.k_true => TokenType::True,
             w if w == &keywords.k_false => TokenType::False,
             w if w == &keywords.k_and => TokenType::And,
             w if w == &keywords.k_or => TokenType::Or,
             w if w == &keywords.k_not => TokenType::Not,
-            w if w == &keywords.k_block => TokenType::Block,
             w if w == &keywords.k_while => TokenType::While,
-            w if w == &keywords.k_do => TokenType::Do,
+            w if w == &keywords.k_fn => TokenType::Fn,
             _ => TokenType::Identifier,
         };
         token
@@ -248,10 +236,13 @@ impl<'a> Lexer<'a> {
             '[' => self.make_token(TokenType::BracketOpen),
             ']' => self.make_token(TokenType::BracketClose),
 
+            '{' => self.make_token(TokenType::BraceOpen),
+            '}' => self.make_token(TokenType::BraceClose),
+
             '+' => self.make_token(TokenType::Plus),
             '-' => self.make_token(TokenType::Minus),
 
-            '=' => self.make_token(TokenType::Equal),
+            '=' if self.mmatch('=') => self.make_token(TokenType::DoubleEqual),
 
             '"' => self.finish_string(),
 

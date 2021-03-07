@@ -1,0 +1,22 @@
+fn say_hi() {
+    print "Hej med dig!"
+}
+
+
+fn add_numbers(x,y,z) {
+    let res := x + y
+    return res + z
+}
+
+let anyn_func := fn(name) {
+    print "hi " .. name .. "!"
+}
+
+fn call_func(func) {
+    return func()
+}
+
+print call_func(fn {
+    print "woah"
+    return "yeah"
+})

@@ -344,7 +344,7 @@ impl CodeGenerator {
                         TokenType::Slash => Instruction::Div,
                         TokenType::Percent => Instruction::Modulo,
 
-                        TokenType::Equal => Instruction::Equal,
+                        TokenType::DoubleEqual => Instruction::Equal,
                         TokenType::Less => Instruction::LessThan,
                         TokenType::LessEqual => Instruction::LessThanOrEqual,
                         TokenType::Greater => Instruction::GreaterThan,
@@ -399,6 +399,10 @@ impl CodeGenerator {
             }
 
             Expr::Call(_) => unimplemented!("call operator () not implemented"),
+
+            Expr::AnynFnDecl(_) => {
+                unimplemented!("anynomous function declarations are really not implemented")
+            }
         };
 
         Ok(())
@@ -420,10 +424,10 @@ impl CodeGenerator {
     }
 
     fn visit_block_stmt<'a>(&mut self, block_stmt: &BlockStmt<'a>) -> Result<()> {
-        self.set_source_pos(block_stmt.open_token.pos);
+        self.set_source_pos(block_stmt.brace_open.pos);
         self.begin_scope();
         self.visit_stmt_list(&block_stmt.statements)?;
-        self.set_source_pos(block_stmt.close_token.pos);
+        self.set_source_pos(block_stmt.brace_close.pos);
         self.end_scope();
         Ok(())
     }
@@ -458,8 +462,8 @@ impl CodeGenerator {
 
                 let mut else_jump = None;
 
-                if is.else_clause.is_some() {
-                    self.set_source_pos(is.else_token.as_ref().unwrap().pos);
+                if let Some(ref else_clause) = is.else_clause {
+                    self.set_source_pos(else_clause.brace_open.pos);
                     else_jump = Some(self.emit_jump_instruction(Instruction::Jump));
                 }
 
@@ -491,7 +495,7 @@ impl CodeGenerator {
                 self.visit_block_stmt(&ws.block)?;
 
                 // when the body has executed, jump back to the start, so we actually loop.
-                self.set_source_pos(ws.end_token.pos);
+                self.set_source_pos(ws.block.brace_close.pos);
                 self.emit_instruction(Instruction::Jump);
                 self.emit_bytes(&start_adress.to_le_bytes());
 
@@ -504,6 +508,8 @@ impl CodeGenerator {
                 // statements are supposed to have a stack effect of 0, so we pop
                 self.emit_instruction(Instruction::Pop);
             }
+
+            Stmt::FnDecl(_) => unimplemented!("Function declarations are so not supported yet!!!"),
         })
     }
 
