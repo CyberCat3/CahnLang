@@ -1,0 +1,5 @@
+More user friendly error displaying.
+Criterion benchmarks.
+Divide into multiple crates.
+Functions.
+Closures.

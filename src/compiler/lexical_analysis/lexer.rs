@@ -30,6 +30,7 @@ struct KeywordAtoms {
     k_not: StringAtom,
     k_while: StringAtom,
     k_fn: StringAtom,
+    k_return: StringAtom,
 }
 
 impl KeywordAtoms {
@@ -47,6 +48,7 @@ impl KeywordAtoms {
             k_not: interner.intern("not"),
             k_while: interner.intern("while"),
             k_fn: interner.intern("fn"),
+            k_return: interner.intern("return"),
         }
     }
 }
@@ -214,6 +216,7 @@ impl<'a> Lexer<'a> {
             w if w == &keywords.k_not => TokenType::Not,
             w if w == &keywords.k_while => TokenType::While,
             w if w == &keywords.k_fn => TokenType::Fn,
+            w if w == &keywords.k_return => TokenType::Return,
             _ => TokenType::Identifier,
         };
         token

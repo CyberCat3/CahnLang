@@ -1,3 +1,5 @@
+#![deny(missing_debug_implementations)]
+
 use std::{env, fs, process::exit};
 
 use cahn_lang::{
@@ -116,7 +118,7 @@ fn main() {
     }
 
     // COMPILE PROGRAM
-    let executable = match CodeGenerator::new(interner, config.cahn_file).gen(&ast) {
+    let executable = match CodeGenerator::gen_executable(config.cahn_file, &ast) {
         Ok(exec) => exec,
         Err(err) => {
             eprintln!("An error occurred during compilation: {}.", err);
@@ -124,9 +126,11 @@ fn main() {
         }
     };
 
+    println!("exec: {:?}", executable);
+
     // PRINT BYTECODE
     if config.print_bytecode {
-        println!("<BYTECODE>\n{}\n</BYTECODE>\n", executable);
+        println!("<BYTECODE>\n{:?}\n</BYTECODE>\n", executable);
     }
 
     // RUN PROGRAM

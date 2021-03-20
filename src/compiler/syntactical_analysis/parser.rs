@@ -77,22 +77,6 @@ impl<'a> Parser<'a> {
         }
     }
 
-    // fn expect_any<T: FnOnce() -> String>(
-    //     &self,
-    //     expected: &[TokenType],
-    //     message_func: T,
-    // ) -> Result<Token> {
-    //     for etype in expected {
-    //         if self.check_ttype(*etype) {
-    //             return Ok(self.advance_token());
-    //         }
-    //     }
-    //     Err(ParseError::BadToken {
-    //         message: message_func(),
-    //         token: self.advance_token(),
-    //     })
-    // }
-
     pub fn parse_program(&self) -> Result<ProgramStmt<'a>> {
         let exprs = self.parse_statement_list()?;
         let eof = self.expect(TokenType::Eof, || "The program should end here".into())?;
@@ -112,7 +96,7 @@ impl<'a> Parser<'a> {
     fn finish_block_stmt(&self, brace_open: Token) -> Result<BlockStmt<'a>> {
         let content = self.parse_statement_list()?;
         let brace_close = self.expect(TokenType::BraceClose, || {
-            "expected 'end' to close explicit block".into()
+            "expected '}' to close block".into()
         })?;
         Ok(BlockStmt::new(brace_open, content, brace_close))
     }
@@ -140,17 +124,25 @@ impl<'a> Parser<'a> {
 
         let then_block = self.finish_block_stmt(brace_open)?;
 
-        let mut if_stmt = IfStmt::new(if_token, condition, then_block, None);
+        let (else_block, else_token) = if let Some(else_token) = self.check_advance(TokenType::Else)
+        {
+            if let Some(else_if_token) = self.check_advance(TokenType::If) {
+                let else_if_block = self.finish_if_stmt(else_if_token)?;
+                (Some(else_if_block.into_stmt(self.arena)), Some(else_token))
+            } else {
+                let brace_open =
+                    self.expect(TokenType::BraceOpen, || "expected '{' after else".into())?;
 
-        if let Some(_else_token) = self.check_advance(TokenType::Else) {
-            let brace_open =
-                self.expect(TokenType::BraceOpen, || "expected '{' after else".into())?;
+                let else_block = self.finish_block_stmt(brace_open)?;
+                (Some(else_block.into_stmt(self.arena)), Some(else_token))
+            }
+        } else {
+            (None, None)
+        };
 
-            let else_block = self.finish_block_stmt(brace_open)?;
-
-            if_stmt.else_clause = Some(else_block);
-        }
-        Ok(if_stmt)
+        Ok(IfStmt::new(
+            if_token, condition, then_block, else_token, else_block,
+        ))
     }
 
     fn finish_while_stmt(&self, while_token: Token) -> Result<WhileStmt<'a>> {
@@ -166,11 +158,41 @@ impl<'a> Parser<'a> {
     }
 
     fn finish_fn_decl_stmt(&self, fn_token: Token) -> Result<FnDeclStmt<'a>> {
-        unimplemented!()
+        let identifier = self.expect(TokenType::Identifier, || {
+            "expected function name after 'fn' in statement".into()
+        })?;
+
+        let mut parameters = bumpalo::vec![in self.arena];
+
+        let _paren_open = self.expect(TokenType::ParenOpen, || {
+            "expected '(' after function name".into()
+        })?;
+
+        loop {
+            if self.check_ttype(TokenType::ParenClose) {
+                break;
+            }
+
+            parameters
+                .push(self.expect(TokenType::Identifier, || "expected paramater name".into())?);
+
+            if self.check_advance(TokenType::Comma).is_none() {
+                break;
+            }
+        }
+
+        let paren_close = self.expect(TokenType::ParenClose, || {
+            "expected ')' after parameter list".into()
+        })?;
+
+        let brace_open = self.expect(TokenType::BraceOpen, || "expected function body".into())?;
+        let fn_body = self.finish_block_stmt(brace_open)?;
+
+        Ok(FnDeclStmt::new(fn_token, identifier, parameters, fn_body))
     }
 
     fn finish_anyn_fn_decl_expr(&self, fn_token: Token) -> Result<AnynFnDeclExpr<'a>> {
-        unimplemented!()
+        unimplemented!("{}", fn_token)
     }
 
     fn parse_statement(&self) -> Result<Stmt<'a>> {
@@ -199,6 +221,10 @@ impl<'a> Parser<'a> {
                 .finish_fn_decl_stmt(self.advance_token())?
                 .into_stmt(self.arena),
 
+            TokenType::Return => self
+                .finish_return_statement(self.advance_token())?
+                .into_stmt(self.arena),
+
             _ => ExprStmt::new(self.parse_expression()?).into_stmt(self.arena),
         };
 
@@ -208,63 +234,18 @@ impl<'a> Parser<'a> {
         Ok(node)
     }
 
-    // fn finish_if_expression(&self, if_token: Token) -> Result<IfExpr<'a>> {
-    //     let condition = self.parse_expression()?;
-    //     let then_token = self.expect(TokenType::Then, || {
-    //         "expected 'then' after if-condition".into()
-    //     })?;
-
-    //     let then_exprs = self.parse_expression_list()?;
-
-    //     if let Some(end_token) = self.check_advance(TokenType::End) {
-    //         return Ok(IfExpr::new(
-    //             if_token,
-    //             condition,
-    //             BlockExpr::new(then_token, then_exprs, end_token.clone()),
-    //             None,
-    //             end_token,
-    //         ));
-    //     };
-
-    //     if let Some(else_token) = self.check_advance(TokenType::Else) {
-    //         let else_exprs = self.parse_expression_list()?;
-
-    //         let end_token =
-    //             self.expect(TokenType::End, || "expected 'end' after else-clause".into())?;
-
-    //         return Ok(IfExpr::new(
-    //             if_token,
-    //             condition,
-    //             BlockExpr::new(then_token, then_exprs, else_token.clone()),
-    //             Some(BlockExpr::new(else_token, else_exprs, end_token.clone())),
-    //             end_token,
-    //         ));
-    //     };
-
-    //     if let Some(else_if_token) = self.check_advance(TokenType::ElseIf) {
-    //         let else_if_expr = self.finish_if_expression(else_if_token.clone())?;
-    //         return Ok(IfExpr::new(
-    //             if_token.clone(),
-    //             condition,
-    //             BlockExpr::new(else_if_token.clone(), then_exprs, else_if_expr.if_token),
-    //             Some(BlockExpr::new(
-    //                 if_token,
-    //                 ExprList::new(bumpalo::vec![in self.arena; self.parse_expression()?]),
-    //                 else_if_token.clone(),
-    //             )),
-    //             else_if_token,
-    //         ));
-    //     }
-
-    //     Err(ParseError::BadToken {
-    //         token: self.advance_token(),
-    //         message: "expected either 'else-if', 'else' or 'end' after then-clause".into(),
-    //     })
-    // }
-
     fn finish_print_statement(&self, print_token: Token) -> Result<PrintStmt<'a>> {
         let expr = self.parse_expression()?;
         Ok(PrintStmt::new(print_token, expr))
+    }
+
+    fn finish_return_statement(&self, return_token: Token) -> Result<ReturnStmt<'a>> {
+        let expr = if self.check_ttype_any(token_groups::BLOCK_ENDINGS) {
+            None
+        } else {
+            Some(self.parse_expression()?)
+        };
+        Ok(ReturnStmt::new(return_token, expr))
     }
 
     fn finish_group_expression(&self, paren_open: Token) -> Result<GroupExpr<'a>> {

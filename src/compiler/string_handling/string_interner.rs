@@ -8,7 +8,7 @@ use std::{
 
 use intmap::IntMap;
 
-use crate::hash_string;
+use crate::utils::hash_string;
 
 #[derive(Debug)]
 pub struct Interner {

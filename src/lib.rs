@@ -1,10 +1,8 @@
 pub mod compiler;
 pub mod executable;
 pub mod runtime;
+pub mod utils;
 
-use std::hash::Hasher;
-
-use ahash::AHasher;
 use compiler::{string_handling::StringInterner, CodeGenerator, Parser};
 use runtime::VM;
 
@@ -16,13 +14,7 @@ pub fn execute_source_to_string(source: &str, file_name: String) -> String {
         .parse_program()
         .unwrap();
 
-    let exec = CodeGenerator::new(interner, file_name).gen(&ast).unwrap();
+    let exec = CodeGenerator::gen_executable(file_name, &ast).unwrap();
 
     VM::run_to_string(&exec).unwrap()
-}
-
-pub fn hash_string(string: &str) -> u64 {
-    let mut hasher = AHasher::default();
-    hasher.write(string.as_bytes());
-    hasher.finish()
 }

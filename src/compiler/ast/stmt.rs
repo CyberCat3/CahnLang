@@ -9,6 +9,7 @@ use {
 #[derive(Debug, Clone)]
 pub enum Stmt<'a> {
     Print(&'a PrintStmt<'a>),
+    Return(&'a ReturnStmt<'a>),
     VarDecl(&'a VarDeclStmt<'a>),
     Block(&'a BlockStmt<'a>),
     StmtList(&'a StmtList<'a>),
@@ -23,6 +24,7 @@ impl<'a> fmt::Display for Stmt<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Stmt::Print(e) => fmt::Display::fmt(e, f),
+            Stmt::Return(e) => fmt::Display::fmt(e, f),
             Stmt::VarDecl(e) => fmt::Display::fmt(e, f),
             Stmt::Block(e) => fmt::Display::fmt(e, f),
             Stmt::StmtList(e) => fmt::Display::fmt(e, f),
@@ -54,6 +56,38 @@ impl<'a> PrintStmt<'a> {
 impl<'a> fmt::Display for PrintStmt<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!("(print {})", self.inner))
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct ReturnStmt<'a> {
+    pub return_token: Token,
+    pub return_val: Option<Expr<'a>>,
+}
+
+impl<'a> ReturnStmt<'a> {
+    pub fn new(return_token: Token, return_val: Option<Expr<'a>>) -> ReturnStmt<'a> {
+        ReturnStmt {
+            return_token,
+            return_val,
+        }
+    }
+
+    pub fn into_stmt(self, arena: &'a bumpalo::Bump) -> Stmt<'a> {
+        Stmt::Return(arena.alloc(self))
+    }
+}
+
+impl<'a> fmt::Display for ReturnStmt<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        {
+            f.write_str("(return")?;
+            if let Some(return_val) = &self.return_val {
+                f.write_fmt(format_args!(" {}", return_val))?;
+            }
+            f.write_char(')')?;
+        }
+        Ok(())
     }
 }
 
@@ -171,7 +205,8 @@ pub struct IfStmt<'a> {
     pub if_token: Token,
     pub condition: Expr<'a>,
     pub then_clause: BlockStmt<'a>,
-    pub else_clause: Option<BlockStmt<'a>>,
+    pub else_token: Option<Token>,
+    pub else_clause: Option<Stmt<'a>>,
 }
 
 impl<'a> IfStmt<'a> {
@@ -179,12 +214,14 @@ impl<'a> IfStmt<'a> {
         if_token: Token,
         condition: Expr<'a>,
         then_clause: BlockStmt<'a>,
-        else_clause: Option<BlockStmt<'a>>,
+        else_token: Option<Token>,
+        else_clause: Option<Stmt<'a>>,
     ) -> IfStmt<'a> {
         IfStmt {
             if_token,
             condition,
             then_clause,
+            else_token,
             else_clause,
         }
     }
@@ -287,8 +324,8 @@ impl<'a> fmt::Display for FnDeclStmt<'a> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_fmt(format_args!(
             "(fn {} ({}) {})",
-            self.name,
-            self.parameters.iter().join(", "),
+            self.name.lexeme,
+            self.parameters.iter().map(|p| &p.lexeme).join(", "),
             self.body
         ))
     }
