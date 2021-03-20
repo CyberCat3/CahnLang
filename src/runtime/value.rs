@@ -1,4 +1,4 @@
-use std::fmt;
+use std::fmt::{self, Write};
 
 use super::{mem_manager::HeapValueHeader, VM};
 
@@ -9,6 +9,8 @@ pub enum Value {
     Number(f64),
     StringLiteral { start_index: u32, end_index: u32 },
     Heap(*mut HeapValueHeader),
+    Function { function_index: u32 },
+    ReturnAdress { ip: usize },
 }
 
 impl fmt::Debug for Value {
@@ -25,6 +27,12 @@ impl fmt::Debug for Value {
                 "StringLiteral({}..{})",
                 start_index, end_index
             ))?,
+
+            Value::Function { function_index } => {
+                f.write_fmt(format_args!("Format(index: {})", function_index))?
+            }
+
+            Value::ReturnAdress { ip } => f.write_fmt(format_args!("ReturnAdress({})", ip))?,
 
             Value::Heap(ptr) => f.write_fmt(format_args!("HeapPtr({:?})", *ptr))?,
         })
@@ -55,6 +63,14 @@ impl<'a, 'b> fmt::Display for FormatableValue<'a, 'b> {
             Value::Bool(b) => f.write_fmt(format_args!("{}", b)),
             Value::Nil => f.write_str("nil"),
             Value::Number(num) => f.write_fmt(format_args!("{}", num)),
+
+            Value::Function { function_index } => {
+                let cahn_function = &self.vm.exec.functions[function_index as usize];
+                let cahn_function = cahn_function.fmt(&self.vm.exec);
+                fmt::Display::fmt(&cahn_function, f)
+            }
+
+            Value::ReturnAdress { ip } => f.write_fmt(format_args!("<returnaddr {}>", ip)),
 
             Value::StringLiteral {
                 start_index,

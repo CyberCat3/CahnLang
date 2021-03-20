@@ -4,7 +4,7 @@ use std::{
 };
 
 #[cfg(feature = "string_interning")]
-use {crate::hash_string, intmap::IntMap};
+use {crate::utils::hash_string, intmap::IntMap};
 
 use super::{Value, VM};
 

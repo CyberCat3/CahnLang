@@ -1,5 +1,5 @@
 use crate::{
-    executable::{Executable, Instruction},
+    executable::{CahnFunction, Executable, Instruction},
     runtime::{
         error::{Result, RuntimeError},
         mem_manager::MemoryManager,
@@ -17,11 +17,14 @@ use std::{
 use super::mem_manager::HeapValue;
 
 pub struct VM<'a> {
-    pub stack: Vec<Value>,
-    ip: usize,
-    fp: usize,
     pub exec: &'a Executable,
     mem_manager: RefCell<MemoryManager>,
+
+    pub stack: Vec<Value>,
+
+    pub curr_func: &'a CahnFunction,
+    ip: usize,
+    fp: usize,
 
     stdout: RefCell<&'a mut dyn Write>,
 }
@@ -38,12 +41,20 @@ impl<'a> Debug for VM<'a> {
 impl<'a> VM<'a> {
     pub fn new(exec: &'a Executable, stdout: &'a mut dyn Write) -> Self {
         VM {
-            stdout: RefCell::new(stdout),
+            mem_manager: RefCell::new(MemoryManager::new()),
+            exec,
+
             stack: Vec::new(),
+
+            curr_func: exec
+                .functions
+                .last()
+                .expect("CodeGenerator didn't create any functions ¯\\_(ツ)_/¯"),
+
             ip: 0,
             fp: 0,
-            exec,
-            mem_manager: RefCell::new(MemoryManager::new()),
+
+            stdout: RefCell::new(stdout),
         }
     }
 
@@ -77,7 +88,7 @@ impl<'a> VM<'a> {
 
     #[inline]
     fn read_u8(&mut self) -> u8 {
-        let byte = self.exec.code[self.ip];
+        let byte = self.curr_func.code[self.ip];
         self.ip += 1;
         byte
     }
@@ -90,7 +101,7 @@ impl<'a> VM<'a> {
 
     #[inline]
     fn read_u16(&mut self) -> u16 {
-        let code = &self.exec.code;
+        let code = &self.curr_func.code;
         let val = u16::from_le_bytes([code[self.ip], code[self.ip + 1]]);
         self.ip += 2;
         val
@@ -98,7 +109,7 @@ impl<'a> VM<'a> {
 
     #[inline]
     fn read_u32(&mut self) -> u32 {
-        let code = &self.exec.code;
+        let code = &self.curr_func.code;
         let val = u32::from_le_bytes([
             code[self.ip],
             code[self.ip + 1],
@@ -107,6 +118,48 @@ impl<'a> VM<'a> {
         ]);
         self.ip += 4;
         val
+    }
+
+    #[inline]
+    fn read_u64(&mut self) -> u64 {
+        let code = &self.curr_func.code;
+        let val = u64::from_le_bytes([
+            code[self.ip],
+            code[self.ip + 1],
+            code[self.ip + 2],
+            code[self.ip + 3],
+            code[self.ip + 4],
+            code[self.ip + 5],
+            code[self.ip + 6],
+            code[self.ip + 7],
+        ]);
+        self.ip += 8;
+        val
+    }
+
+    #[inline]
+    fn get_local(&self, stack_offset: usize) -> Value {
+        self.stack[self.fp + stack_offset]
+    }
+
+    fn assert_function<'b>(&'b self, val: Value) -> &'a CahnFunction {
+        match val {
+            Value::Function { function_index } => &self.exec.functions[function_index as usize],
+            other => panic!(
+                "invalid bytecode, expected value to be a function, got: {}",
+                other.fmt(&self)
+            ),
+        }
+    }
+
+    fn assert_return_address(&self, val: Value) -> usize {
+        match val {
+            Value::ReturnAdress { ip } => ip,
+            other => panic!(
+                "invalid bytecode, expected value to be a return adress, got: {}",
+                other.fmt(&self)
+            ),
+        }
     }
 
     #[inline]
@@ -166,12 +219,12 @@ impl<'a> VM<'a> {
 
             Instruction::GetLocal => {
                 let stack_offset = self.read_u8();
-                self.push(self.stack[self.fp + stack_offset as usize]);
+                self.push(self.get_local(stack_offset as usize))
             }
 
             Instruction::GetLocalW => {
                 let stack_offset = self.read_u16();
-                self.push(self.stack[self.fp + stack_offset as usize]);
+                self.push(self.get_local(stack_offset as usize))
             }
 
             Instruction::LoadTrue => self.push(Value::Bool(true)),
@@ -474,12 +527,29 @@ impl<'a> VM<'a> {
 
                 self.push(list[index]);
             }
+
+            Instruction::LoadFunction => {
+                let function_index = self.read_u32();
+                self.push(Value::Function { function_index })
+            }
         };
         Ok(())
     }
 
+    fn print_stack(&self) {
+        for (index, val) in self.stack.iter().enumerate() {
+            if index == self.fp {
+                print!("<fp>");
+            }
+            print!("{}   ", (*val).fmt(&self));
+        }
+        println!();
+    }
+
     pub fn run(mut self) -> Result<()> {
-        while self.ip < self.exec.code.len() {
+        while self.ip < self.curr_func.code.len() {
+            let code_pos = self.curr_func.code_map[self.ip];
+
             let instruction = self.read_instruction();
             // println!("about to run: {:?}", instruction);
 
@@ -488,24 +558,19 @@ impl<'a> VM<'a> {
 
             self.exec_instruction(instruction)?;
 
-            // let mut padding = String::new();
-            // let ins_str = format!("{:?}", instruction);
+            let mut padding = String::new();
+            let ins_str = format!("{:?}", instruction);
 
-            // for _ in 0..(20 - ins_str.len()) {
-            //     padding.push('-');
-            // }
+            for _ in 0..(20 - ins_str.len()) {
+                padding.push('-');
+            }
 
-            // print!(
-            //     "{}:{}\t{:?}{}-->   ",
-            //     self.exec.source_file,
-            //     self.exec.code_map[self.ip - 1],
-            //     instruction,
-            //     padding,
-            // );
-            // for val in &self.stack {
-            //     print!("{:?}({})   ", val, (*val).fmt(&self));
-            // }
-            // println!();
+            print!(
+                "{}:{}\t{:?}{}-->   ",
+                self.exec.source_file, code_pos, instruction, padding,
+            );
+
+            self.print_stack();
         }
         Ok(())
     }

@@ -134,6 +134,21 @@ const stmts = [
         }
     },
     {
+        name: "ReturnStmt",
+        ename: "Return",
+        format_custom: `{
+            f.write_str("(return")?;
+            if let Some(return_val) = &self.return_val {
+                f.write_fmt(format_args!(" {}", return_val))?;
+            }
+            f.write_char(')')?;
+        }Ok(())`,
+        fields: {
+            return_token: "Token",
+            return_val: "Option<Expr<'a>>",
+        }
+    },
+    {
         name: "VarDeclStmt",
         ename: "VarDecl",
         format: "({} {} {})", fargs: "self.var_token.lexeme, self.identifier.lexeme, self.init_expr",
@@ -188,7 +203,8 @@ const stmts = [
             if_token: "Token",
             condition: "Expr<'a>",
             then_clause: "BlockStmt<'a>",
-            else_clause: "Option<BlockStmt<'a>>",
+            else_token: "Option<Token>",
+            else_clause: "Option<Stmt<'a>>",
         }
     },
     {
@@ -212,7 +228,7 @@ const stmts = [
     {
         name: "FnDeclStmt",
         ename: "FnDecl",
-        format: "(fn {} ({}) {})", fargs: `self.name, self.parameters.iter().join(", "), self.body`,
+        format: "(fn {} ({}) {})", fargs: `self.name.lexeme, self.parameters.iter().map(|p| &p.lexeme).join(", "), self.body`,
         fields: {
             fn_token: "Token",
             name: "Token",

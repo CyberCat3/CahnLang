@@ -10,6 +10,9 @@ pub enum CodeGenError {
     #[error("invalid assignment target: {}", .message)]
     // todo there should be an ast node included in this
     InvalidAssignmentTarget { message: String },
+
+    #[error("too many parameters, cahn supports up to {}, but {} were declared", .max, .count)]
+    TooManyParameters { count: usize, max: usize },
 }
 
 pub type Result<T> = std::result::Result<T, CodeGenError>;

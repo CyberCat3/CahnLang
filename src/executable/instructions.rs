@@ -1,14 +1,20 @@
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(u8)]
 pub enum Instruction {
+    Negate,
+    Not,
     Add,
     Mul,
     Sub,
     Div,
-    Negate,
     Modulo,
+    Concat,
 
-    Not,
+    LessThan,
+    GreaterThan,
+    LessThanOrEqual,
+    GreaterThanOrEqual,
+    Equal,
 
     CreateList,
     CreateListWithCap,
@@ -16,6 +22,12 @@ pub enum Instruction {
     ListPush,
     ListGetIndex,
 
+    LoadTrue,
+    LoadFalse,
+    LoadNil,
+
+    LoadStringLiteral,
+    LoadLitNum,
     LoadConstNum,
     LoadConstNumW,
     LoadConstNumWW,
@@ -25,20 +37,7 @@ pub enum Instruction {
     GetLocal,
     GetLocalW,
 
-    LoadLitNum,
-    LoadStringLiteral,
-
-    Concat,
-
-    LoadTrue,
-    LoadFalse,
-    LoadNil,
-
-    LessThan,
-    GreaterThan,
-    LessThanOrEqual,
-    GreaterThanOrEqual,
-    Equal,
+    LoadFunction,
 
     Dup,
     Pop,

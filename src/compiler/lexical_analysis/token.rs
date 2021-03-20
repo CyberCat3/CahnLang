@@ -43,6 +43,7 @@ pub enum TokenType {
     GreaterEqual,
 
     Fn,
+    Return,
 
     If,
     Else,

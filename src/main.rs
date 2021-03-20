@@ -1,3 +1,5 @@
+#![deny(missing_debug_implementations)]
+
 use std::{env, fs, process::exit};
 
 use cahn_lang::{
@@ -49,7 +51,7 @@ fn get_config() -> Config {
 
     let mut config = Config::default();
 
-    while let Some(arg) = args.next() {
+    for arg in args {
         match &arg[..] {
             "-s" | "--print-source" => config.print_source = true,
             "-l" | "--print-tokens" => config.print_tokens = true,
@@ -102,7 +104,7 @@ fn main() {
     }
 
     // PARSE PROGRAM
-    let ast = match Parser::from_str(&source_code, &arena, interner.clone()).parse_program() {
+    let ast = match Parser::from_str(&source_code, &arena, interner).parse_program() {
         Ok(ast) => ast,
         Err(err) => {
             eprintln!("An error occurred during parsing: {}.", err);
@@ -116,7 +118,7 @@ fn main() {
     }
 
     // COMPILE PROGRAM
-    let executable = match CodeGenerator::new(interner, config.cahn_file).gen(&ast) {
+    let executable = match CodeGenerator::gen_executable(config.cahn_file, &ast) {
         Ok(exec) => exec,
         Err(err) => {
             eprintln!("An error occurred during compilation: {}.", err);
@@ -126,7 +128,7 @@ fn main() {
 
     // PRINT BYTECODE
     if config.print_bytecode {
-        println!("<BYTECODE>\n{}\n</BYTECODE>\n", executable);
+        println!("<BYTECODE>\n{:?}\n</BYTECODE>\n", executable);
     }
 
     // RUN PROGRAM
